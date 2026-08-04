@@ -1,0 +1,7 @@
+# Hemmeligheter — må aldri i et offentlig repo.
+# Romnøkkelen er det eneste som beskytter dataene, og databasepassordet
+# gir full tilgang. Den publiserbare Supabase-nøkkelen ligger derimot
+# bevisst i ferber-timer.html; slik er den ment å brukes.
+supabase/.env.local
+supabase/anon-key.txt
+supabase/.temp/
