@@ -320,7 +320,7 @@
     gap: .9rem;
   }
 
-  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.2rem, 1fr)); gap: .5rem; }
   .stat { display: flex; flex-direction: column; gap: .2rem; }
   .stat .n {
     font-family: var(--mono);
@@ -336,6 +336,7 @@
     text-transform: uppercase;
     color: var(--dim);
   }
+  .stat .n.over { color: var(--rose); }
 
   .timeline { display: flex; flex-direction: column; max-height: 22rem; overflow-y: auto; }
   .entry {
@@ -462,6 +463,28 @@
   .iconbtn.undo:hover { color: var(--sage); border-color: color-mix(in srgb, var(--sage) 45%, var(--line)); }
 
   .addrow { display: grid; grid-template-columns: 1fr auto auto auto; gap: .4rem; align-items: center; }
+
+  .checkrow {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: .4rem;
+    align-items: center;
+    padding: .3rem 0 .3rem 1.1rem;
+    border-top: 1px dashed color-mix(in srgb, var(--line) 70%, transparent);
+  }
+  .checkrow .lead {
+    font-family: var(--mono);
+    font-size: .72rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--dim);
+  }
+  .checkrow .unit {
+    font-family: var(--mono);
+    font-size: .68rem;
+    color: var(--dim);
+  }
+  input.secs { width: 4.4rem; }
+  input.secs.over { color: var(--rose); border-color: color-mix(in srgb, var(--rose) 45%, var(--line)); }
 
   /* ---------- overføring mellom enheter ---------- */
 
@@ -1251,27 +1274,33 @@
     var eps = episodesFor(day);
     var live = eps.filter(function (e) { return !e.skip; });
 
-    var checks = 0, wakings = 0, bedMin = null;
+    var checks = 0, wakings = 0, bedMin = null, longest = 0;
     for (var i = 0; i < live.length; i++) {
       checks += live[i].checks.length;
+      for (var q = 0; q < live[i].checks.length; q++) {
+        if (live[i].checks[q].dur > longest) longest = live[i].checks[q].dur;
+      }
       if (live[i].kind === "waking") wakings++;
       if (live[i].kind === "bedtime" && live[i].asleepAt && bedMin === null) {
         bedMin = mins(live[i].asleepAt - live[i].startedAt);
       }
     }
+    var longestSec = Math.round(longest / 1000);
 
     var stats = document.getElementById("stats");
     stats.textContent = "";
     var data = [
-      [bedMin === null ? "—" : bedMin, "min til søvn"],
-      [checks, "besøk"],
-      [wakings, "oppvåkninger"]
+      [bedMin === null ? "—" : bedMin, "min til søvn", false],
+      [checks, "besøk", false],
+      [checks ? longestSec + " s" : "—", "lengste besøk", longestSec > 60],
+      [wakings, "oppvåkninger", false]
     ];
     for (var d = 0; d < data.length; d++) {
       var box = document.createElement("div");
       box.className = "stat";
       var n = document.createElement("span");
-      n.className = "n"; n.textContent = data[d][0];
+      n.className = "n" + (data[d][2] ? " over" : "");
+      n.textContent = data[d][0];
       var k = document.createElement("span");
       k.className = "k"; k.textContent = data[d][1];
       box.appendChild(n); box.appendChild(k);
@@ -1523,6 +1552,57 @@
         row.appendChild(att);
         row.appendChild(del);
         box.appendChild(row);
+
+        // Besøkene under økten. Et trykk på ett sekund er nesten alltid
+        // et feiltrykk — enten rett varighet, eller fjern det helt.
+        if (!ep.deleted) {
+          for (var c = 0; c < ep.checks.length; c++) {
+            (function (chk, nr) {
+              var cr = document.createElement("div");
+              cr.className = "checkrow";
+
+              var lead = document.createElement("span");
+              lead.className = "lead";
+              lead.textContent = "Innom " + nr + " · " + clockTime(chk.at);
+
+              var secs = document.createElement("input");
+              secs.className = "secs att" + (chk.dur > 60000 ? " over" : "");
+              secs.type = "number";
+              secs.min = "0";
+              secs.max = "3600";
+              secs.step = "5";
+              secs.value = Math.round(chk.dur / 1000);
+              secs.title = "Hvor lenge du var inne";
+              secs.addEventListener("change", function () {
+                var v = Number(secs.value);
+                if (!isFinite(v) || v < 0) return;
+                editEpisode(day, ep.startedAt, function (e) {
+                  e.checks[nr - 1].dur = Math.round(v) * 1000;
+                });
+              });
+
+              var unit = document.createElement("span");
+              unit.className = "unit";
+              unit.textContent = "sek";
+
+              var rm = document.createElement("button");
+              rm.className = "iconbtn";
+              rm.textContent = "Fjern";
+              rm.title = "Fjern besøket helt — for feiltrykk";
+              rm.addEventListener("click", function () {
+                editEpisode(day, ep.startedAt, function (e) {
+                  e.checks.splice(nr - 1, 1);
+                });
+              });
+
+              cr.appendChild(lead);
+              cr.appendChild(secs);
+              cr.appendChild(unit);
+              cr.appendChild(rm);
+              box.appendChild(cr);
+            })(ep.checks[c], c + 1);
+          }
+        }
       })(eps[i]);
     }
 
