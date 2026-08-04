@@ -366,6 +366,103 @@
 
   .empty { font-size: .88rem; color: var(--dim); font-style: italic; margin: 0; }
 
+  /* ---------- nattstripe ---------- */
+
+  .strip {
+    position: relative;
+    height: 3.2rem;
+    border-radius: .4rem;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--sage) 22%, var(--ground));
+    border: 1px solid var(--line);
+  }
+  .strip .seg { position: absolute; top: 0; bottom: 0; }
+  .strip .awake { background: var(--amber); }
+  .strip .awake.skip { background: var(--dim); opacity: .5; }
+  .strip .tick { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--rose); }
+  .strip .hour { position: absolute; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--text) 14%, transparent); }
+  .strip .now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); opacity: .55; }
+
+  .stripaxis { position: relative; height: 1rem; margin-top: .25rem; }
+  .stripaxis span {
+    position: absolute;
+    transform: translateX(-50%);
+    font-family: var(--mono);
+    font-size: .6rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--dim);
+    white-space: nowrap;
+  }
+
+  .striplegend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .1rem 1rem;
+    font-family: var(--mono);
+    font-size: .6rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .striplegend span { display: inline-flex; align-items: center; gap: .35rem; }
+  .striplegend i { width: .7rem; height: .7rem; border-radius: .15rem; display: inline-block; }
+  .striplegend i.sleep { background: color-mix(in srgb, var(--sage) 60%, var(--ground)); }
+  .striplegend i.awake { background: var(--amber); }
+  .striplegend i.visit { background: var(--rose); width: .2rem; border-radius: 0; }
+  .striplegend i.skipped { background: var(--dim); opacity: .5; }
+
+  /* ---------- redigering ---------- */
+
+  .editrow {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: .4rem;
+    align-items: center;
+    padding: .5rem 0;
+    border-top: 1px solid var(--line);
+  }
+  .editrow:first-child { border-top: 0; }
+  .editrow .when {
+    font-family: var(--mono);
+    font-size: .74rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--dim);
+  }
+  .editrow.gone .when, .editrow.gone select { opacity: .45; text-decoration: line-through; }
+
+  select.pick, input.att {
+    font-family: var(--mono);
+    font-size: .78rem;
+    color: var(--text);
+    background: var(--ground);
+    border: 1px solid var(--line);
+    border-radius: .4rem;
+    padding: .35rem .4rem;
+    min-height: 2.2rem;
+  }
+  select.pick { width: 100%; }
+  input.att { width: 5.5rem; font-variant-numeric: tabular-nums; }
+  select.pick:focus-visible, input.att:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+
+  .iconbtn {
+    font-family: var(--mono);
+    font-size: .62rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: .4rem;
+    padding: .4rem .5rem;
+    min-height: 2.2rem;
+    cursor: pointer;
+  }
+  .iconbtn:hover { color: var(--rose); border-color: color-mix(in srgb, var(--rose) 45%, var(--line)); }
+  .iconbtn:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+  .iconbtn.undo:hover { color: var(--sage); border-color: color-mix(in srgb, var(--sage) 45%, var(--line)); }
+
+  .addrow { display: grid; grid-template-columns: 1fr auto auto auto; gap: .4rem; align-items: center; }
+
   /* ---------- overføring mellom enheter ---------- */
 
   .synchelp { margin: 0; font-size: .84rem; color: var(--dim); line-height: 1.45; }
@@ -578,9 +675,25 @@
   <div class="col side">
 
     <section class="panel">
-      <span class="label">I natt</span>
+      <div class="top" style="border: 0; padding: 0;">
+        <span class="label">Natten så langt</span>
+        <select class="pick" id="dayPick" style="width: auto;" aria-label="Velg natt å se på"></select>
+      </div>
+
+      <div class="strip" id="strip"></div>
+      <div class="stripaxis" id="stripAxis"></div>
+      <div class="striplegend">
+        <span><i class="sleep"></i>sover</span>
+        <span><i class="awake"></i>våken</span>
+        <span><i class="visit"></i>besøk</span>
+        <span><i class="skipped"></i>utenom</span>
+      </div>
+
       <div class="stats" id="stats"></div>
       <div class="timeline" id="timeline"></div>
+
+      <button class="btn small mid" id="editToggle">Endre denne natten</button>
+      <div id="editor" hidden></div>
     </section>
 
     <section class="panel">
@@ -1134,16 +1247,16 @@
   }
 
   function renderLog() {
-    var t = tonight();
-    var eps = t.episodes.slice();
-    if (S.episode && !S.episode.asleepAt) eps.push(S.episode);
+    var day = activeDay();
+    var eps = episodesFor(day);
+    var live = eps.filter(function (e) { return !e.skip; });
 
     var checks = 0, wakings = 0, bedMin = null;
-    for (var i = 0; i < eps.length; i++) {
-      checks += eps[i].checks.length;
-      if (eps[i].kind === "waking") wakings++;
-      if (eps[i].kind === "bedtime" && eps[i].asleepAt && bedMin === null) {
-        bedMin = mins(eps[i].asleepAt - eps[i].startedAt);
+    for (var i = 0; i < live.length; i++) {
+      checks += live[i].checks.length;
+      if (live[i].kind === "waking") wakings++;
+      if (live[i].kind === "bedtime" && live[i].asleepAt && bedMin === null) {
+        bedMin = mins(live[i].asleepAt - live[i].startedAt);
       }
     }
 
@@ -1170,7 +1283,9 @@
     if (!eps.length) {
       var p = document.createElement("p");
       p.className = "empty";
-      p.textContent = "Ingenting registrert ennå i natt.";
+      p.textContent = day === today()
+        ? "Ingenting registrert ennå i natt."
+        : "Ingenting registrert denne natten.";
       tl.appendChild(p);
       return;
     }
@@ -1190,14 +1305,281 @@
 
     for (var j = 0; j < eps.length; j++) {
       var ep = eps[j];
-      entry(ep.startedAt, ep.kind === "bedtime" ? "Lagt ned" : "Våknet", "", "head");
+      var head = ep.kind === "bedtime" ? "Lagt ned" : "Våknet";
+      if (ep.skip) head += " · utenom";
+      entry(ep.startedAt, head, "", ep.skip ? "" : "head");
       for (var c = 0; c < ep.checks.length; c++) {
         entry(ep.checks[c].at, "Innom (" + (c + 1) + ")", Math.round(ep.checks[c].dur / 1000) + " s");
       }
       if (ep.asleepAt) {
-        entry(ep.asleepAt, "Sovnet", mins(ep.asleepAt - ep.startedAt) + " min", "mark");
+        entry(ep.asleepAt, ep.skip ? "Ferdig" : "Sovnet",
+          mins(ep.asleepAt - ep.startedAt) + " min", ep.skip ? "" : "mark");
       }
     }
+  }
+
+  /* ---------- nattstripe og gjennomgang ---------- */
+
+  var viewDay = null;   // null = natten som går nå
+
+  function activeDay() { return viewDay || today(); }
+
+  function recordFor(day) { return S.history[day] || { night: S.night + 1, episodes: [] }; }
+
+  function episodesFor(day) {
+    var eps = shown(recordFor(day));
+    if (day === today() && S.episode && !S.episode.asleepAt) eps = eps.concat([S.episode]);
+    return eps.sort(function (a, b) { return a.startedAt - b.startedAt; });
+  }
+
+  function dayLabel(day) {
+    var rec = S.history[day];
+    var parts = day.split("-");
+    var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    var datoTekst = d.toLocaleDateString("nb-NO", { day: "numeric", month: "short" });
+    return "Natt " + (rec ? rec.night : S.night + 1) + " — " + datoTekst +
+      (day === today() ? " (nå)" : "");
+  }
+
+  function renderDayPick() {
+    var pick = document.getElementById("dayPick");
+    var days = Object.keys(S.history);
+    if (days.indexOf(today()) === -1) days.push(today());
+    days.sort().reverse();
+
+    pick.textContent = "";
+    for (var i = 0; i < days.length; i++) {
+      var o = document.createElement("option");
+      o.value = days[i];
+      o.textContent = dayLabel(days[i]);
+      if (days[i] === activeDay()) o.selected = true;
+      pick.appendChild(o);
+    }
+  }
+
+  function renderStrip() {
+    var strip = document.getElementById("strip");
+    var axis = document.getElementById("stripAxis");
+    strip.textContent = "";
+    axis.textContent = "";
+
+    var day = activeDay();
+    var eps = episodesFor(day);
+    if (!eps.length) return;
+
+    var isNow = day === today();
+    var from = eps[0].startedAt;
+    var to = from;
+    for (var i = 0; i < eps.length; i++) {
+      to = Math.max(to, eps[i].asleepAt || Date.now());
+    }
+    if (isNow) to = Math.max(to, Date.now());
+    var span = Math.max(to - from, 60000);
+    var pct = function (ts) { return ((ts - from) / span) * 100; };
+
+    // Hel time-linjer, så stripen er til å lese av mot klokka.
+    var first = new Date(from);
+    first.setMinutes(0, 0, 0);
+    for (var h = first.getTime(); h <= to; h += 3600000) {
+      if (h < from) continue;
+      var line = document.createElement("div");
+      line.className = "hour";
+      line.style.left = pct(h) + "%";
+      strip.appendChild(line);
+
+      var lab = document.createElement("span");
+      lab.textContent = clockTime(h);
+      lab.style.left = pct(h) + "%";
+      axis.appendChild(lab);
+    }
+
+    // Bakgrunnen er søvn; våkne bolker legges oppå.
+    for (var j = 0; j < eps.length; j++) {
+      var ep = eps[j];
+      var end = ep.asleepAt || (isNow ? Date.now() : ep.startedAt);
+      var block = document.createElement("div");
+      block.className = "seg awake" + (ep.skip ? " skip" : "");
+      block.style.left = pct(ep.startedAt) + "%";
+      block.style.width = Math.max(0.6, pct(end) - pct(ep.startedAt)) + "%";
+      block.title = (ep.kind === "bedtime" ? "Lagt ned " : "Våknet ") +
+        clockTime(ep.startedAt) + (ep.asleepAt ? "–" + clockTime(ep.asleepAt) : " (pågår)") +
+        " · " + mins(end - ep.startedAt) + " min" + (ep.skip ? " · utenom" : "");
+      strip.appendChild(block);
+
+      for (var c = 0; c < ep.checks.length; c++) {
+        var tick = document.createElement("div");
+        tick.className = "tick";
+        tick.style.left = pct(ep.checks[c].at) + "%";
+        tick.title = "Innom " + clockTime(ep.checks[c].at) + " · " +
+          Math.round(ep.checks[c].dur / 1000) + " s";
+        strip.appendChild(tick);
+      }
+    }
+
+    if (isNow) {
+      var nowLine = document.createElement("div");
+      nowLine.className = "now";
+      nowLine.style.left = pct(Date.now()) + "%";
+      strip.appendChild(nowLine);
+    }
+  }
+
+  /* ---------- redigering av en natt ---------- */
+
+  var editing = false;
+
+  function toTimeValue(ts) {
+    var d = new Date(ts);
+    return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+  }
+
+  // Klokkeslett tolkes i forhold til et referansepunkt: er tiden tidligere
+  // enn referansen, ligger den etter midnatt og hører til neste døgn.
+  function fromTimeValue(base, val) {
+    var p = /^(\d{1,2}):(\d{2})$/.exec(val || "");
+    if (!p) return null;
+    var d = new Date(base);
+    d.setHours(Number(p[1]), Number(p[2]), 0, 0);
+    var ts = d.getTime();
+    if (ts < base) ts += 86400000;
+    return ts;
+  }
+
+  function editEpisode(day, startedAt, change) {
+    var rec = S.history[day];
+    if (!rec) return;
+    for (var i = 0; i < rec.episodes.length; i++) {
+      if (rec.episodes[i].startedAt === startedAt) {
+        change(rec.episodes[i]);
+        rec.episodes[i].editedAt = Date.now();
+        break;
+      }
+    }
+    commit();
+  }
+
+  function renderEditor() {
+    var box = document.getElementById("editor");
+    var toggle = document.getElementById("editToggle");
+    toggle.textContent = editing ? "Ferdig" : "Endre denne natten";
+    box.hidden = !editing;
+    if (!editing) return;
+
+    var day = activeDay();
+    var rec = S.history[day];
+    box.textContent = "";
+
+    var eps = rec ? rec.episodes.slice().sort(function (a, b) { return a.startedAt - b.startedAt; }) : [];
+
+    for (var i = 0; i < eps.length; i++) {
+      (function (ep) {
+        var row = document.createElement("div");
+        row.className = "editrow" + (ep.deleted ? " gone" : "");
+
+        var when = document.createElement("span");
+        when.className = "when";
+        when.textContent = clockTime(ep.startedAt) + "–" +
+          (ep.asleepAt ? clockTime(ep.asleepAt) : "…");
+
+        var kind = document.createElement("select");
+        kind.className = "pick";
+        [["bedtime", "Lagt ned"], ["waking", "Oppvåkning"], ["skip", "Utenom (bleie, mat)"]]
+          .forEach(function (o) {
+            var opt = document.createElement("option");
+            opt.value = o[0];
+            opt.textContent = o[1];
+            if (o[0] === "skip" ? ep.skip : (!ep.skip && ep.kind === o[0])) opt.selected = true;
+            kind.appendChild(opt);
+          });
+        kind.disabled = !!ep.deleted;
+        kind.addEventListener("change", function () {
+          editEpisode(day, ep.startedAt, function (e) {
+            if (kind.value === "skip") { e.skip = true; }
+            else { e.skip = false; e.kind = kind.value; }
+          });
+        });
+
+        var att = document.createElement("input");
+        att.className = "att";
+        att.type = "time";
+        att.value = ep.asleepAt ? toTimeValue(ep.asleepAt) : "";
+        att.title = "Klokkeslettet hun sovnet";
+        att.disabled = !!ep.deleted;
+        att.addEventListener("change", function () {
+          var ts = fromTimeValue(ep.startedAt, att.value);
+          if (ts === null) return;
+          editEpisode(day, ep.startedAt, function (e) { e.asleepAt = ts; });
+        });
+
+        var del = document.createElement("button");
+        del.className = "iconbtn" + (ep.deleted ? " undo" : "");
+        del.textContent = ep.deleted ? "Angre" : "Slett";
+        del.addEventListener("click", function () {
+          editEpisode(day, ep.startedAt, function (e) { e.deleted = !e.deleted; });
+        });
+
+        row.appendChild(when);
+        row.appendChild(kind);
+        row.appendChild(att);
+        row.appendChild(del);
+        box.appendChild(row);
+      })(eps[i]);
+    }
+
+    // Legg til en økt du glemte å registrere — for eksempel når du sovnet
+    // fra det selv og aldri fikk trykket.
+    var addLabel = document.createElement("span");
+    addLabel.className = "label";
+    addLabel.style.marginTop = ".6rem";
+    addLabel.textContent = "Legg til økt du glemte";
+    box.appendChild(addLabel);
+
+    var add = document.createElement("div");
+    add.className = "addrow";
+
+    var aKind = document.createElement("select");
+    aKind.className = "pick";
+    [["waking", "Oppvåkning"], ["bedtime", "Lagt ned"], ["skip", "Utenom"]].forEach(function (o) {
+      var opt = document.createElement("option");
+      opt.value = o[0]; opt.textContent = o[1];
+      aKind.appendChild(opt);
+    });
+
+    var aFrom = document.createElement("input");
+    aFrom.className = "att"; aFrom.type = "time"; aFrom.title = "Våknet";
+
+    var aTo = document.createElement("input");
+    aTo.className = "att"; aTo.type = "time"; aTo.title = "Sovnet";
+
+    var aBtn = document.createElement("button");
+    aBtn.className = "iconbtn undo";
+    aBtn.textContent = "Legg til";
+    aBtn.addEventListener("click", function () {
+      var eksisterende = episodesFor(day);
+      var base = eksisterende.length ? eksisterende[0].startedAt : Date.now();
+      var s = fromTimeValue(base, aFrom.value);
+      if (s === null) { say("Fyll inn når hun våknet.", "err"); return; }
+      var e = aTo.value ? fromTimeValue(s, aTo.value) : null;
+
+      if (!S.history[day]) S.history[day] = { night: S.night + 1, episodes: [] };
+      S.history[day].episodes.push({
+        kind: aKind.value === "skip" ? "waking" : aKind.value,
+        skip: aKind.value === "skip",
+        startedAt: s,
+        checks: [],
+        asleepAt: e,
+        editedAt: Date.now()
+      });
+      S.history[day].episodes.sort(function (a, b) { return a.startedAt - b.startedAt; });
+      aFrom.value = ""; aTo.value = "";
+      commit();
+    });
+
+    add.appendChild(aKind);
+    add.appendChild(aFrom);
+    add.appendChild(aTo);
+    add.appendChild(aBtn);
+    box.appendChild(add);
   }
 
   function renderChart() {
@@ -1206,10 +1588,10 @@
     var keys = Object.keys(S.history).sort();
     for (var i = 0; i < keys.length; i++) {
       var rec = S.history[keys[i]];
-      for (var j = 0; j < rec.episodes.length; j++) {
-        var ep = rec.episodes[j];
-        if (ep.kind === "bedtime" && ep.asleepAt) {
-          byNight[rec.night] = mins(ep.asleepAt - ep.startedAt);
+      var eps = counted(rec);   // slettede og «utenom» skal ikke telle
+      for (var j = 0; j < eps.length; j++) {
+        if (eps[j].kind === "bedtime" && eps[j].asleepAt) {
+          byNight[rec.night] = mins(eps[j].asleepAt - eps[j].startedAt);
           break;
         }
       }
@@ -1250,9 +1632,22 @@
     renderNights();
     renderStage();
     renderControls();
+    renderDayPick();
+    renderStrip();
     renderLog();
+    renderEditor();
     renderChart();
   }
+
+  document.getElementById("dayPick").addEventListener("change", function () {
+    viewDay = this.value === today() ? null : this.value;
+    render();
+  });
+
+  document.getElementById("editToggle").addEventListener("click", function () {
+    editing = !editing;
+    renderEditor();
+  });
 
   /* ---------- innstillinger ---------- */
 
@@ -1307,10 +1702,11 @@
     return JSON.stringify({ v: 1, exported: Date.now(), night: S.night, history: S.history }, null, 1);
   }
 
-  // Episoder slås sammen på startedAt, så samme fil kan importeres
-  // flere ganger og i begge retninger uten å lage duplikater.
+  // Episoder identifiseres på startedAt. Er den samme økten kjent begge
+  // steder, vinner den som sist ble endret. Slettinger er ikke fjerning,
+  // men et merke — ellers ville den andre enheten bare lagt økten inn igjen.
   function mergeHistory(incoming) {
-    var added = 0;
+    var touched = 0;
     for (var k in incoming) {
       if (!Object.prototype.hasOwnProperty.call(incoming, k)) continue;
       var theirs = incoming[k];
@@ -1318,21 +1714,40 @@
 
       if (!S.history[k]) {
         S.history[k] = { night: theirs.night || 1, episodes: theirs.episodes.slice() };
-        added += theirs.episodes.length;
+        touched += theirs.episodes.length;
         continue;
       }
 
       var mine = S.history[k];
       mine.night = Math.max(mine.night || 1, theirs.night || 1);
-      var seen = {};
-      for (var i = 0; i < mine.episodes.length; i++) seen[mine.episodes[i].startedAt] = true;
+
+      var at = {};
+      for (var i = 0; i < mine.episodes.length; i++) at[mine.episodes[i].startedAt] = i;
+
       for (var j = 0; j < theirs.episodes.length; j++) {
         var ep = theirs.episodes[j];
-        if (!seen[ep.startedAt]) { mine.episodes.push(ep); added++; }
+        var idx = at[ep.startedAt];
+        if (idx === undefined) {
+          mine.episodes.push(ep);
+          touched++;
+        } else if ((ep.editedAt || 0) > (mine.episodes[idx].editedAt || 0)) {
+          mine.episodes[idx] = ep;
+          touched++;
+        }
       }
       mine.episodes.sort(function (a, b) { return a.startedAt - b.startedAt; });
     }
-    return added;
+    return touched;
+  }
+
+  /* ---------- økter: hva teller med ---------- */
+
+  function shown(rec) {
+    return (rec && rec.episodes ? rec.episodes : []).filter(function (e) { return !e.deleted; });
+  }
+
+  function counted(rec) {
+    return shown(rec).filter(function (e) { return !e.skip; });
   }
 
   function applyImport(text) {
@@ -1596,5 +2011,7 @@
   // vinduet er minimert og timeren strupes.
   setInterval(renderStage, 250);
   setInterval(save, 15000);
+  // Stripen trenger bare å følge med på at «nå»-streken flytter seg.
+  setInterval(function () { if (!editing) renderStrip(); }, 10000);
 })();
 </script>
