@@ -333,6 +333,19 @@
 
   /* ---------- natten som periodeliste ---------- */
 
+  select.pick {
+    font-family: var(--mono);
+    font-size: .72rem;
+    color: var(--text);
+    background: var(--ground);
+    border: 1px solid var(--line);
+    border-radius: .4rem;
+    padding: .35rem .45rem;
+    cursor: pointer;
+  }
+  select.pick:hover { border-color: var(--dim); }
+  select.pick:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+
   .periods { display: flex; flex-direction: column; }
 
   .per {
