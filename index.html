@@ -1,3 +1,18 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0C0B0F">
+<meta name="color-scheme" content="dark light">
+<meta name="description" content="Timer for innom-besøk under Ferber-søvntrening, med logg over natten og synk mellom enheter.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ferber">
 <title>Ferber-timer</title>
 
 <style>
@@ -716,7 +731,9 @@
 
   footer.fine { font-size: .76rem; color: var(--dim); text-align: center; line-height: 1.5; }
 </style>
+</head>
 
+<body>
 <div id="veil"></div>
 
 <main class="app">
@@ -2371,9 +2388,23 @@
   }
   // Alt regnes ut fra tidsstempler, så nedtellingen stemmer selv om
   // vinduet er minimert og timeren strupes.
+  // Registrerer service workeren, som er det som gjør at Android tilbyr
+  // ekte installasjon i stedet for en bokmerkesnarvei — og som lar appen
+  // åpne seg når nettet er borte midt på natten.
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () {
+        // Uten den virker alt som før, bare uten installasjon og frakoblet bruk.
+      });
+    });
+  }
+
   setInterval(renderStage, 250);
   setInterval(save, 15000);
   // En natt som pågår vokser, så både stripen og tallene må følge med.
   setInterval(function () { if (openId === null) { renderStrip(); renderNightLine(); renderPeriods(); } }, 10000);
 })();
 </script>
+
+</body>
+</html>
