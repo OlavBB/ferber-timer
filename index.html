@@ -338,6 +338,103 @@
   }
   .stat .n.over { color: var(--rose); }
 
+  /* ---------- valg av statistikkvisning ---------- */
+
+  .segctrl { display: flex; gap: .25rem; }
+  .segctrl button {
+    flex: 1;
+    font-family: var(--mono);
+    font-size: .6rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--dim);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: .4rem;
+    padding: .4rem .3rem;
+    cursor: pointer;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .segctrl button:hover { color: var(--text); }
+  .segctrl button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .segctrl button[aria-pressed="true"] {
+    color: var(--amber);
+    border-color: var(--amber-lo);
+    background: color-mix(in srgb, var(--amber) 12%, transparent);
+  }
+
+  /* Fordeling */
+
+  .span {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: var(--mono);
+    font-size: .78rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--dim);
+  }
+  .span b { color: var(--text); font-weight: 400; }
+
+  .propbar {
+    display: flex;
+    height: 1.6rem;
+    border-radius: .35rem;
+    overflow: hidden;
+    border: 1px solid var(--line);
+  }
+  .propbar div { min-width: 2px; }
+  .propbar .p-sleep { background: color-mix(in srgb, var(--sage) 65%, var(--ground)); }
+  .propbar .p-awake { background: var(--amber); }
+
+  .proplegend {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: .72rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .proplegend .a { color: var(--sage); }
+  .proplegend .b { color: var(--amber); }
+
+  .facts {
+    font-family: var(--mono);
+    font-size: .74rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--dim);
+    letter-spacing: .02em;
+  }
+
+  /* Utvikling */
+
+  .deltas { display: flex; flex-direction: column; }
+  .drow {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: .7rem;
+    align-items: baseline;
+    padding: .45rem 0;
+    border-top: 1px solid var(--line);
+  }
+  .drow:first-child { border-top: 0; }
+  .drow .lbl { font-size: .88rem; color: var(--text); }
+  .drow .val {
+    font-family: var(--mono);
+    font-size: .95rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+  .drow .dlt {
+    font-family: var(--mono);
+    font-size: .72rem;
+    font-variant-numeric: tabular-nums;
+    min-width: 4.5rem;
+    text-align: right;
+  }
+  .drow .dlt.better { color: var(--sage); }
+  .drow .dlt.worse { color: var(--rose); }
+  .drow .dlt.same { color: var(--dim); }
+
   .timeline { display: flex; flex-direction: column; max-height: 22rem; overflow-y: auto; }
   .entry {
     display: grid;
@@ -718,7 +815,12 @@
         <span><i class="skipped"></i>utenom</span>
       </div>
 
-      <div class="stats" id="stats"></div>
+      <div class="segctrl" id="viewPick" role="group" aria-label="Velg statistikkvisning">
+        <button type="button" data-v="tall">Tall</button>
+        <button type="button" data-v="fordeling">Fordeling</button>
+        <button type="button" data-v="utvikling">Utvikling</button>
+      </div>
+      <div id="statsBox"></div>
       <div class="timeline" id="timeline"></div>
 
       <button class="btn small mid" id="editToggle">Endre denne natten</button>
@@ -868,6 +970,7 @@
     checkIndex: 0,          // antall fullførte besøk i denne episoden
     episode: null,
     history: {},
+    statsView: "tall",      // tall | fordeling | utvikling
     sound: true,
     dim: false,
     alarmedAt: 0,
@@ -887,7 +990,7 @@
       localStorage.setItem(KEY, JSON.stringify({
         night: S.night, phase: S.phase, phaseStart: S.phaseStart,
         checkIndex: S.checkIndex, episode: S.episode,
-        history: S.history, sound: S.sound, dim: S.dim
+        history: S.history, statsView: S.statsView, sound: S.sound, dim: S.dim
       }));
     } catch (e) { /* privat modus e.l. — appen virker fint uten */ }
   }
@@ -899,6 +1002,7 @@
       var d = JSON.parse(raw);
       S.night = d.night || 0;
       S.history = d.history || {};
+      if (d.statsView) S.statsView = d.statsView;
       S.sound = d.sound !== false;
       S.dim = !!d.dim;
       if (d.phase && d.phase !== "idle" && d.episode) {
@@ -1079,6 +1183,14 @@
       S.history[k].episodes.push(S.episode);
       S.history[k].episodes.sort(function (a, b) { return a.startedAt - b.startedAt; });
     }
+    // Merker når natten ble avsluttet, så statistikken slutter å telle
+    // utover morgenen. Starter du en ny økt senere samme natt, ligger den
+    // etter dette tidspunktet og merket ses bort fra av seg selv.
+    // Nøkkelen tas fra økten, ikke fra klokka nå. Avslutter du natten
+    // etter kl. 12 ville today() pekt på neste natt.
+    var dag = S.episode ? nightKey(S.episode.startedAt) : today();
+    if (S.history[dag]) S.history[dag].endedAt = Date.now();
+
     S.phase = "idle";
     S.episode = null;
     S.checkIndex = 0;
@@ -1305,40 +1417,6 @@
   function renderLog() {
     var day = activeDay();
     var eps = episodesFor(day);
-    var live = eps.filter(function (e) { return !e.skip; });
-
-    var checks = 0, wakings = 0, bedMin = null, longest = 0;
-    for (var i = 0; i < live.length; i++) {
-      checks += live[i].checks.length;
-      for (var q = 0; q < live[i].checks.length; q++) {
-        if (live[i].checks[q].dur > longest) longest = live[i].checks[q].dur;
-      }
-      if (live[i].kind === "waking") wakings++;
-      if (live[i].kind === "bedtime" && live[i].asleepAt && bedMin === null) {
-        bedMin = mins(live[i].asleepAt - live[i].startedAt);
-      }
-    }
-    var longestSec = Math.round(longest / 1000);
-
-    var stats = document.getElementById("stats");
-    stats.textContent = "";
-    var data = [
-      [bedMin === null ? "—" : bedMin, "min til søvn", false],
-      [checks, "besøk", false],
-      [checks ? longestSec + " s" : "—", "lengste besøk", longestSec > 60],
-      [wakings, "oppvåkninger", false]
-    ];
-    for (var d = 0; d < data.length; d++) {
-      var box = document.createElement("div");
-      box.className = "stat";
-      var n = document.createElement("span");
-      n.className = "n" + (data[d][2] ? " over" : "");
-      n.textContent = data[d][0];
-      var k = document.createElement("span");
-      k.className = "k"; k.textContent = data[d][1];
-      box.appendChild(n); box.appendChild(k);
-      stats.appendChild(box);
-    }
 
     var tl = document.getElementById("timeline");
     tl.textContent = "";
@@ -1396,6 +1474,60 @@
     return eps.sort(function (a, b) { return a.startedAt - b.startedAt; });
   }
 
+  function hm(ms) {
+    var m = Math.max(0, Math.round(ms / 60000));
+    var h = Math.floor(m / 60);
+    return h ? h + " t " + (m % 60) + " min" : m + " min";
+  }
+
+  // Natten regnes fra hun ble lagt til siste hendelse — ikke til «nå».
+  // Sto hun opp 06:00, skal ikke klokka fortsette å telle utover morgenen.
+  // endedAt brukes bare hvis den ligger etter siste hendelse, så en natt
+  // som fortsetter etter at du avsluttet retter seg selv.
+  function nightSummary(day) {
+    var eps = episodesFor(day);
+    if (!eps.length) return null;
+
+    var rec = S.history[day];
+    var isNow = day === today();
+    var runningStart = (isNow && S.episode && !S.episode.asleepAt) ? S.episode.startedAt : null;
+
+    var start = eps[0].startedAt;
+    var end = start;
+    var awake = 0, checks = 0, longest = 0, wakings = 0, bedMs = null, open = 0;
+
+    for (var i = 0; i < eps.length; i++) {
+      var ep = eps[i];
+      var stop = ep.asleepAt || (runningStart === ep.startedAt ? Date.now() : null);
+      if (stop === null) { open++; stop = ep.startedAt; }
+      if (stop > end) end = stop;
+
+      if (ep.skip) continue;
+      awake += stop - ep.startedAt;
+      checks += ep.checks.length;
+      for (var c = 0; c < ep.checks.length; c++) {
+        if (ep.checks[c].dur > longest) longest = ep.checks[c].dur;
+      }
+      if (ep.kind === "waking") wakings++;
+      if (ep.kind === "bedtime" && ep.asleepAt && bedMs === null) bedMs = stop - ep.startedAt;
+    }
+
+    if (rec && rec.endedAt && rec.endedAt > end) end = rec.endedAt;
+
+    var total = Math.max(0, end - start);
+    return {
+      start: start, end: end, total: total,
+      awake: awake, asleep: Math.max(0, total - awake),
+      checks: checks, longest: longest, wakings: wakings,
+      bedMs: bedMs, open: open, running: !!runningStart
+    };
+  }
+
+  function prevDay(day) {
+    var keys = Object.keys(S.history).filter(function (k) { return k < day; }).sort();
+    return keys.length ? keys[keys.length - 1] : null;
+  }
+
   function dayLabel(day) {
     var rec = S.history[day];
     var parts = day.split("-");
@@ -1421,6 +1553,154 @@
     }
   }
 
+  function renderStats() {
+    var box = document.getElementById("statsBox");
+    box.textContent = "";
+
+    var pick = document.getElementById("viewPick");
+    var btns = pick.getElementsByTagName("button");
+    for (var b = 0; b < btns.length; b++) {
+      btns[b].setAttribute("aria-pressed", btns[b].getAttribute("data-v") === S.statsView ? "true" : "false");
+    }
+
+    var day = activeDay();
+    var s = nightSummary(day);
+    if (!s) {
+      var p = document.createElement("p");
+      p.className = "empty";
+      p.textContent = day === today()
+        ? "Ingenting registrert ennå i natt."
+        : "Ingenting registrert denne natten.";
+      box.appendChild(p);
+      return;
+    }
+
+    if (S.statsView === "fordeling") { statsFordeling(box, s); return; }
+    if (S.statsView === "utvikling") { statsUtvikling(box, s, day); return; }
+    statsTall(box, s);
+  }
+
+  function tile(parent, value, label, over) {
+    var box = document.createElement("div");
+    box.className = "stat";
+    var n = document.createElement("span");
+    n.className = "n" + (over ? " over" : "");
+    n.textContent = value;
+    var k = document.createElement("span");
+    k.className = "k";
+    k.textContent = label;
+    box.appendChild(n); box.appendChild(k);
+    parent.appendChild(box);
+  }
+
+  function statsTall(box, s) {
+    var grid = document.createElement("div");
+    grid.className = "stats";
+    var sek = Math.round(s.longest / 1000);
+    tile(grid, s.bedMs === null ? "—" : mins(s.bedMs), "min til søvn");
+    tile(grid, s.wakings, "oppvåkninger");
+    tile(grid, s.checks ? sek + " s" : "—", "lengste besøk", sek > 60);
+    tile(grid, hm(s.awake), "våken totalt");
+    tile(grid, hm(s.total), "natten totalt");
+    box.appendChild(grid);
+  }
+
+  function statsFordeling(box, s) {
+    var span = document.createElement("div");
+    span.className = "span";
+    var left = document.createElement("span");
+    left.innerHTML = "<b>" + clockTime(s.start) + "</b> – <b>" +
+      clockTime(s.end) + "</b>" + (s.running ? " (pågår)" : "");
+    var right = document.createElement("span");
+    right.textContent = hm(s.total);
+    span.appendChild(left); span.appendChild(right);
+    box.appendChild(span);
+
+    var bar = document.createElement("div");
+    bar.className = "propbar";
+    var sleepPct = s.total ? (s.asleep / s.total) * 100 : 0;
+    var a = document.createElement("div");
+    a.className = "p-sleep";
+    a.style.width = sleepPct + "%";
+    a.title = "Sov " + hm(s.asleep);
+    var b = document.createElement("div");
+    b.className = "p-awake";
+    b.style.width = (100 - sleepPct) + "%";
+    b.title = "Våken " + hm(s.awake);
+    bar.appendChild(a); bar.appendChild(b);
+    box.appendChild(bar);
+
+    var leg = document.createElement("div");
+    leg.className = "proplegend";
+    var l1 = document.createElement("span");
+    l1.className = "a";
+    l1.textContent = "sov " + hm(s.asleep);
+    var l2 = document.createElement("span");
+    l2.className = "b";
+    l2.textContent = "våken " + hm(s.awake);
+    leg.appendChild(l1); leg.appendChild(l2);
+    box.appendChild(leg);
+
+    var f = document.createElement("div");
+    f.className = "facts";
+    var bits = [];
+    if (s.bedMs !== null) bits.push("sovnet etter " + mins(s.bedMs) + " min");
+    bits.push(s.wakings + (s.wakings === 1 ? " oppvåkning" : " oppvåkninger"));
+    bits.push(s.checks + (s.checks === 1 ? " besøk" : " besøk"));
+    if (s.checks) bits.push("lengste " + Math.round(s.longest / 1000) + " s");
+    if (s.open) bits.push(s.open + " uten sluttid");
+    f.textContent = bits.join(" · ");
+    box.appendChild(f);
+  }
+
+  function statsUtvikling(box, s, day) {
+    var pd = prevDay(day);
+    var p = pd ? nightSummary(pd) : null;
+
+    var rows = [
+      ["Til søvn", s.bedMs === null ? null : mins(s.bedMs), p && p.bedMs !== null ? mins(p.bedMs) : null, " min"],
+      ["Oppvåkninger", s.wakings, p ? p.wakings : null, ""],
+      ["Lengste besøk", s.checks ? Math.round(s.longest / 1000) : null, p && p.checks ? Math.round(p.longest / 1000) : null, " s"],
+      ["Våken totalt", Math.round(s.awake / 60000), p ? Math.round(p.awake / 60000) : null, " min"]
+    ];
+
+    var list = document.createElement("div");
+    list.className = "deltas";
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = document.createElement("div");
+      r.className = "drow";
+
+      var lbl = document.createElement("span");
+      lbl.className = "lbl";
+      lbl.textContent = rows[i][0];
+
+      var val = document.createElement("span");
+      val.className = "val";
+      val.textContent = rows[i][1] === null ? "—" : rows[i][1] + rows[i][3];
+
+      var dlt = document.createElement("span");
+      // Lavere er bedre for alle fire målene.
+      if (rows[i][1] === null || rows[i][2] === null) {
+        dlt.className = "dlt same";
+        dlt.textContent = pd ? "—" : "";
+      } else {
+        var d = rows[i][1] - rows[i][2];
+        dlt.className = "dlt " + (d < 0 ? "better" : d > 0 ? "worse" : "same");
+        dlt.textContent = d === 0 ? "uendret" : (d < 0 ? "↓ " : "↑ ") + Math.abs(d) + rows[i][3];
+      }
+
+      r.appendChild(lbl); r.appendChild(val); r.appendChild(dlt);
+      list.appendChild(r);
+    }
+    box.appendChild(list);
+
+    var f = document.createElement("div");
+    f.className = "facts";
+    f.textContent = pd ? "sammenlignet med " + dayLabel(pd).replace(" (nå)", "") : "ingen tidligere natt å sammenligne med";
+    box.appendChild(f);
+  }
+
   function renderStrip() {
     var strip = document.getElementById("strip");
     var axis = document.getElementById("stripAxis");
@@ -1432,12 +1712,9 @@
     if (!eps.length) return;
 
     var isNow = day === today();
-    var from = eps[0].startedAt;
-    var to = from;
-    for (var i = 0; i < eps.length; i++) {
-      to = Math.max(to, eps[i].asleepAt || Date.now());
-    }
-    if (isNow) to = Math.max(to, Date.now());
+    var s = nightSummary(day);
+    var from = s.start;
+    var to = s.end;
     var span = Math.max(to - from, 60000);
     var pct = function (ts) { return ((ts - from) / span) * 100; };
 
@@ -1484,7 +1761,8 @@
       }
     }
 
-    if (isNow) {
+    // «Nå»-streken hører bare hjemme mens noe faktisk pågår.
+    if (isNow && s.running) {
       var nowLine = document.createElement("div");
       nowLine.className = "now";
       nowLine.style.left = pct(Date.now()) + "%";
@@ -1753,6 +2031,7 @@
     renderControls();
     renderDayPick();
     renderStrip();
+    renderStats();
     renderLog();
     renderEditor();
     renderChart();
@@ -1766,6 +2045,14 @@
   document.getElementById("editToggle").addEventListener("click", function () {
     editing = !editing;
     renderEditor();
+  });
+
+  document.getElementById("viewPick").addEventListener("click", function (e) {
+    var v = e.target && e.target.getAttribute && e.target.getAttribute("data-v");
+    if (!v || v === S.statsView) return;
+    S.statsView = v;
+    save();
+    renderStats();
   });
 
   /* ---------- innstillinger ---------- */
@@ -1839,6 +2126,7 @@
 
       var mine = S.history[k];
       mine.night = Math.max(mine.night || 1, theirs.night || 1);
+      if (theirs.endedAt && theirs.endedAt > (mine.endedAt || 0)) mine.endedAt = theirs.endedAt;
 
       var at = {};
       for (var i = 0; i < mine.episodes.length; i++) at[mine.episodes[i].startedAt] = i;
