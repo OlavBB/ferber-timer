@@ -320,120 +320,16 @@
     gap: .9rem;
   }
 
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.2rem, 1fr)); gap: .5rem; }
-  .stat { display: flex; flex-direction: column; gap: .2rem; }
-  .stat .n {
-    font-family: var(--mono);
-    font-size: 1.6rem;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    color: var(--amber);
-  }
-  .stat .k {
-    font-family: var(--mono);
-    font-size: .58rem;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: var(--dim);
-  }
-  .stat .n.over { color: var(--rose); }
-
-  /* ---------- valg av statistikkvisning ---------- */
-
-  .segctrl { display: flex; gap: .25rem; }
-  .segctrl button {
-    flex: 1;
-    font-family: var(--mono);
-    font-size: .6rem;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: var(--dim);
-    background: transparent;
-    border: 1px solid var(--line);
-    border-radius: .4rem;
-    padding: .4rem .3rem;
-    cursor: pointer;
-    transition: color .15s, border-color .15s, background .15s;
-  }
-  .segctrl button:hover { color: var(--text); }
-  .segctrl button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
-  .segctrl button[aria-pressed="true"] {
-    color: var(--amber);
-    border-color: var(--amber-lo);
-    background: color-mix(in srgb, var(--amber) 12%, transparent);
-  }
-
-  /* Fordeling */
-
-  .span {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    font-family: var(--mono);
-    font-size: .78rem;
-    font-variant-numeric: tabular-nums;
-    color: var(--dim);
-  }
-  .span b { color: var(--text); font-weight: 400; }
-
-  .propbar {
-    display: flex;
-    height: 1.6rem;
-    border-radius: .35rem;
-    overflow: hidden;
-    border: 1px solid var(--line);
-  }
-  .propbar div { min-width: 2px; }
-  .propbar .p-sleep { background: color-mix(in srgb, var(--sage) 65%, var(--ground)); }
-  .propbar .p-awake { background: var(--amber); }
-
-  .proplegend {
-    display: flex;
-    justify-content: space-between;
-    font-family: var(--mono);
-    font-size: .72rem;
-    font-variant-numeric: tabular-nums;
-  }
-  .proplegend .a { color: var(--sage); }
-  .proplegend .b { color: var(--amber); }
-
   .facts {
     font-family: var(--mono);
     font-size: .74rem;
     font-variant-numeric: tabular-nums;
     color: var(--dim);
     letter-spacing: .02em;
+    line-height: 1.5;
   }
-
-  /* Utvikling */
-
-  .deltas { display: flex; flex-direction: column; }
-  .drow {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    gap: .7rem;
-    align-items: baseline;
-    padding: .45rem 0;
-    border-top: 1px solid var(--line);
-  }
-  .drow:first-child { border-top: 0; }
-  .drow .lbl { font-size: .88rem; color: var(--text); }
-  .drow .val {
-    font-family: var(--mono);
-    font-size: .95rem;
-    font-variant-numeric: tabular-nums;
-    color: var(--text);
-  }
-  .drow .dlt {
-    font-family: var(--mono);
-    font-size: .72rem;
-    font-variant-numeric: tabular-nums;
-    min-width: 4.5rem;
-    text-align: right;
-  }
-  .drow .dlt.better { color: var(--sage); }
-  .drow .dlt.worse { color: var(--rose); }
-  .drow .dlt.same { color: var(--dim); }
+  .facts b { color: var(--text); font-weight: 400; }
+  .facts .over { color: var(--rose); }
 
   .timeline { display: flex; flex-direction: column; max-height: 22rem; overflow-y: auto; }
   .entry {
@@ -615,10 +511,9 @@
 
   .chart {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: .45rem;
+    gap: .35rem;
     align-items: end;
-    height: 7.5rem;
+    height: 8rem;
   }
   .bar-cell {
     display: flex;
@@ -637,17 +532,9 @@
   .bar-cell.now .bar-val { color: var(--amber); }
   .bar { width: 100%; background: var(--amber-lo); border-radius: 4px 4px 0 0; min-height: 3px; }
   .bar-cell.now .bar { background: var(--amber); }
-  .bar.none {
-    background: transparent;
-    border: 1px dashed var(--line);
-    border-bottom: 0;
-    height: 6px;
-    border-radius: 4px 4px 0 0;
-  }
   .axis {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: .45rem;
+    gap: .35rem;
     border-top: 1px solid var(--line);
     padding-top: .35rem;
   }
@@ -658,6 +545,9 @@
     color: var(--dim);
     text-align: center;
   }
+  .axis.sub { border-top: 0; padding-top: .1rem; }
+  .axis.sub span { font-size: .6rem; opacity: .75; }
+  .axis span.now { color: var(--amber); }
 
   /* ---------- veiledning ---------- */
 
@@ -815,12 +705,7 @@
         <span><i class="skipped"></i>utenom</span>
       </div>
 
-      <div class="segctrl" id="viewPick" role="group" aria-label="Velg statistikkvisning">
-        <button type="button" data-v="tall">Tall</button>
-        <button type="button" data-v="fordeling">Fordeling</button>
-        <button type="button" data-v="utvikling">Utvikling</button>
-      </div>
-      <div id="statsBox"></div>
+      <div class="facts" id="nightLine"></div>
       <div class="timeline" id="timeline"></div>
 
       <button class="btn small mid" id="editToggle">Endre denne natten</button>
@@ -828,9 +713,11 @@
     </section>
 
     <section class="panel">
-      <span class="label">Minutter til hun sovnet ved leggetid</span>
+      <span class="label">Våken tid gjennom natten</span>
       <div class="chart" id="chart"></div>
       <div class="axis" id="chartAxis"></div>
+      <div class="axis sub" id="chartSub"></div>
+      <span class="facts" id="chartNote"></span>
     </section>
 
     <section class="panel">
@@ -970,7 +857,6 @@
     checkIndex: 0,          // antall fullførte besøk i denne episoden
     episode: null,
     history: {},
-    statsView: "tall",      // tall | fordeling | utvikling
     sound: true,
     dim: false,
     alarmedAt: 0,
@@ -990,7 +876,7 @@
       localStorage.setItem(KEY, JSON.stringify({
         night: S.night, phase: S.phase, phaseStart: S.phaseStart,
         checkIndex: S.checkIndex, episode: S.episode,
-        history: S.history, statsView: S.statsView, sound: S.sound, dim: S.dim
+        history: S.history, sound: S.sound, dim: S.dim
       }));
     } catch (e) { /* privat modus e.l. — appen virker fint uten */ }
   }
@@ -1002,7 +888,6 @@
       var d = JSON.parse(raw);
       S.night = d.night || 0;
       S.history = d.history || {};
-      if (d.statsView) S.statsView = d.statsView;
       S.sound = d.sound !== false;
       S.dim = !!d.dim;
       if (d.phase && d.phase !== "idle" && d.episode) {
@@ -1533,10 +1418,6 @@
     };
   }
 
-  function prevDay(day) {
-    var keys = Object.keys(S.history).filter(function (k) { return k < day; }).sort();
-    return keys.length ? keys[keys.length - 1] : null;
-  }
 
   function dayLabel(day) {
     var rec = S.history[day];
@@ -1563,152 +1444,36 @@
     }
   }
 
-  function renderStats() {
-    var box = document.getElementById("statsBox");
-    box.textContent = "";
-
-    var pick = document.getElementById("viewPick");
-    var btns = pick.getElementsByTagName("button");
-    for (var b = 0; b < btns.length; b++) {
-      btns[b].setAttribute("aria-pressed", btns[b].getAttribute("data-v") === S.statsView ? "true" : "false");
-    }
+  // Nattens egne tall er en bildetekst til stripen, ikke en egen visning.
+  // Spørsmålet «hva skjedde i natt» besvares av stripen og loggen.
+  function renderNightLine() {
+    var line = document.getElementById("nightLine");
+    line.textContent = "";
 
     var day = activeDay();
     var s = nightSummary(day);
     if (!s) {
-      var p = document.createElement("p");
-      p.className = "empty";
-      p.textContent = day === today()
+      line.textContent = day === today()
         ? "Ingenting registrert ennå i natt."
         : "Ingenting registrert denne natten.";
-      box.appendChild(p);
       return;
     }
 
-    if (S.statsView === "fordeling") { statsFordeling(box, s); return; }
-    if (S.statsView === "utvikling") { statsUtvikling(box, s, day); return; }
-    statsTall(box, s);
-  }
-
-  function tile(parent, value, label, over) {
-    var box = document.createElement("div");
-    box.className = "stat";
-    var n = document.createElement("span");
-    n.className = "n" + (over ? " over" : "");
-    n.textContent = value;
-    var k = document.createElement("span");
-    k.className = "k";
-    k.textContent = label;
-    box.appendChild(n); box.appendChild(k);
-    parent.appendChild(box);
-  }
-
-  function statsTall(box, s) {
-    var grid = document.createElement("div");
-    grid.className = "stats";
     var sek = Math.round(s.longest / 1000);
-    tile(grid, s.bedMs === null ? "—" : mins(s.bedMs), "min til søvn");
-    tile(grid, s.wakings, "oppvåkninger");
-    tile(grid, s.checks ? sek + " s" : "—", "lengste besøk", sek > 60);
-    tile(grid, hm(s.awake), "våken totalt");
-    tile(grid, hm(s.total), "natten totalt");
-    box.appendChild(grid);
-  }
-
-  function statsFordeling(box, s) {
-    var span = document.createElement("div");
-    span.className = "span";
-    var left = document.createElement("span");
-    left.innerHTML = "<b>" + clockTime(s.start) + "</b> – <b>" +
-      clockTime(s.end) + "</b>" + (s.ongoing ? " (pågår)" : "");
-    var right = document.createElement("span");
-    right.textContent = hm(s.total);
-    span.appendChild(left); span.appendChild(right);
-    box.appendChild(span);
-
-    var bar = document.createElement("div");
-    bar.className = "propbar";
-    var sleepPct = s.total ? (s.asleep / s.total) * 100 : 0;
-    var a = document.createElement("div");
-    a.className = "p-sleep";
-    a.style.width = sleepPct + "%";
-    a.title = "Sov " + hm(s.asleep);
-    var b = document.createElement("div");
-    b.className = "p-awake";
-    b.style.width = (100 - sleepPct) + "%";
-    b.title = "Våken " + hm(s.awake);
-    bar.appendChild(a); bar.appendChild(b);
-    box.appendChild(bar);
-
-    var leg = document.createElement("div");
-    leg.className = "proplegend";
-    var l1 = document.createElement("span");
-    l1.className = "a";
-    l1.textContent = "sov " + hm(s.asleep);
-    var l2 = document.createElement("span");
-    l2.className = "b";
-    l2.textContent = "våken " + hm(s.awake);
-    leg.appendChild(l1); leg.appendChild(l2);
-    box.appendChild(leg);
-
-    var f = document.createElement("div");
-    f.className = "facts";
-    var bits = [];
+    var bits = [
+      "<b>" + clockTime(s.start) + "–" + clockTime(s.end) + "</b>" + (s.ongoing ? " (pågår)" : ""),
+      hm(s.total),
+      "våken <b>" + hm(s.awake) + "</b>"
+    ];
     if (s.bedMs !== null) bits.push("sovnet etter " + mins(s.bedMs) + " min");
     bits.push(s.wakings + (s.wakings === 1 ? " oppvåkning" : " oppvåkninger"));
-    bits.push(s.checks + (s.checks === 1 ? " besøk" : " besøk"));
-    if (s.checks) bits.push("lengste " + Math.round(s.longest / 1000) + " s");
-    if (s.open) bits.push(s.open + " uten sluttid");
-    f.textContent = bits.join(" · ");
-    box.appendChild(f);
-  }
-
-  function statsUtvikling(box, s, day) {
-    var pd = prevDay(day);
-    var p = pd ? nightSummary(pd) : null;
-
-    var rows = [
-      ["Til søvn", s.bedMs === null ? null : mins(s.bedMs), p && p.bedMs !== null ? mins(p.bedMs) : null, " min"],
-      ["Oppvåkninger", s.wakings, p ? p.wakings : null, ""],
-      ["Lengste besøk", s.checks ? Math.round(s.longest / 1000) : null, p && p.checks ? Math.round(p.longest / 1000) : null, " s"],
-      ["Våken totalt", Math.round(s.awake / 60000), p ? Math.round(p.awake / 60000) : null, " min"]
-    ];
-
-    var list = document.createElement("div");
-    list.className = "deltas";
-
-    for (var i = 0; i < rows.length; i++) {
-      var r = document.createElement("div");
-      r.className = "drow";
-
-      var lbl = document.createElement("span");
-      lbl.className = "lbl";
-      lbl.textContent = rows[i][0];
-
-      var val = document.createElement("span");
-      val.className = "val";
-      val.textContent = rows[i][1] === null ? "—" : rows[i][1] + rows[i][3];
-
-      var dlt = document.createElement("span");
-      // Lavere er bedre for alle fire målene.
-      if (rows[i][1] === null || rows[i][2] === null) {
-        dlt.className = "dlt same";
-        dlt.textContent = pd ? "—" : "";
-      } else {
-        var d = rows[i][1] - rows[i][2];
-        dlt.className = "dlt " + (d < 0 ? "better" : d > 0 ? "worse" : "same");
-        dlt.textContent = d === 0 ? "uendret" : (d < 0 ? "↓ " : "↑ ") + Math.abs(d) + rows[i][3];
-      }
-
-      r.appendChild(lbl); r.appendChild(val); r.appendChild(dlt);
-      list.appendChild(r);
+    if (s.checks) {
+      bits.push(s.checks + " besøk, lengste " +
+        (sek > 60 ? "<span class='over'>" + sek + " s</span>" : sek + " s"));
     }
-    box.appendChild(list);
+    if (s.open) bits.push("<span class='over'>" + s.open + " uten sluttid</span>");
 
-    var f = document.createElement("div");
-    f.className = "facts";
-    f.textContent = pd ? "sammenlignet med " + dayLabel(pd).replace(" (nå)", "") : "ingen tidligere natt å sammenligne med";
-    box.appendChild(f);
+    line.innerHTML = bits.join(" · ");
   }
 
   function renderStrip() {
@@ -1990,49 +1755,77 @@
   }
 
   function renderChart() {
-    // Én serie, én farge: minutter fra legging til søvn, per natt i programmet.
-    var byNight = {};
+    // Buen: én serie, én farge — våken tid per natt. Det er tallet som
+    // avgjør om dere sover, og det som faktisk varierer. Antall
+    // oppvåkninger følger som sekundær rad under aksen.
+    var rows = [];
     var keys = Object.keys(S.history).sort();
     for (var i = 0; i < keys.length; i++) {
-      var rec = S.history[keys[i]];
-      var eps = counted(rec);   // slettede og «utenom» skal ikke telle
-      for (var j = 0; j < eps.length; j++) {
-        if (eps[j].kind === "bedtime" && eps[j].asleepAt) {
-          byNight[rec.night] = mins(eps[j].asleepAt - eps[j].startedAt);
-          break;
-        }
-      }
+      var s = nightSummary(keys[i]);
+      if (!s) continue;
+      rows.push({
+        day: keys[i],
+        night: S.history[keys[i]].night,
+        awake: Math.round(s.awake / 60000),
+        wakings: s.wakings,
+        ongoing: s.ongoing
+      });
     }
-    var max = 10;
-    for (var n in byNight) if (byNight[n] > max) max = byNight[n];
+    rows = rows.slice(-14);   // to uker får plass, også på telefon
 
     var chart = document.getElementById("chart");
     var axis = document.getElementById("chartAxis");
+    var sub = document.getElementById("chartSub");
+    var note = document.getElementById("chartNote");
     chart.textContent = "";
     axis.textContent = "";
+    sub.textContent = "";
 
-    for (var k = 1; k <= 7; k++) {
-      var cell = document.createElement("div");
-      cell.className = "bar-cell" + (k === S.night + 1 ? " now" : "");
-      var v = byNight[k];
-      var val = document.createElement("span");
-      val.className = "bar-val";
-      val.textContent = v === undefined ? "" : v;
-      var bar = document.createElement("div");
-      if (v === undefined) {
-        bar.className = "bar none";
-      } else {
-        bar.className = "bar";
-        bar.style.height = Math.max(4, Math.round((v / max) * 80)) + "px";
-        bar.title = "Natt " + k + ": " + v + " minutter til hun sovnet";
-      }
-      cell.appendChild(val); cell.appendChild(bar);
-      chart.appendChild(cell);
-
-      var lab = document.createElement("span");
-      lab.textContent = k;
-      axis.appendChild(lab);
+    if (!rows.length) {
+      note.textContent = "Buen tegnes når du har logget en natt.";
+      return;
     }
+
+    var cols = "repeat(" + rows.length + ", minmax(0, 1fr))";
+    chart.style.gridTemplateColumns = cols;
+    axis.style.gridTemplateColumns = cols;
+    sub.style.gridTemplateColumns = cols;
+
+    var max = 30;
+    for (var m = 0; m < rows.length; m++) if (rows[m].awake > max) max = rows[m].awake;
+
+    for (var k = 0; k < rows.length; k++) {
+      (function (r) {
+        var cell = document.createElement("div");
+        cell.className = "bar-cell" + (r.day === activeDay() ? " now" : "");
+
+        var val = document.createElement("span");
+        val.className = "bar-val";
+        val.textContent = r.awake;
+
+        var bar = document.createElement("div");
+        bar.className = "bar";
+        bar.style.height = Math.max(4, Math.round((r.awake / max) * 82)) + "px";
+        bar.title = "Natt " + r.night + ": våken " + hm(r.awake * 60000) +
+          ", " + r.wakings + (r.wakings === 1 ? " oppvåkning" : " oppvåkninger") +
+          (r.ongoing ? " (pågår)" : "");
+
+        cell.appendChild(val);
+        cell.appendChild(bar);
+        chart.appendChild(cell);
+
+        var lab = document.createElement("span");
+        lab.textContent = r.night;
+        if (r.day === activeDay()) lab.className = "now";
+        axis.appendChild(lab);
+
+        var w = document.createElement("span");
+        w.textContent = r.wakings;
+        sub.appendChild(w);
+      })(rows[k]);
+    }
+
+    note.textContent = "over: våken minutter · under: oppvåkninger · tall = natt";
   }
 
   function render() {
@@ -2041,7 +1834,7 @@
     renderControls();
     renderDayPick();
     renderStrip();
-    renderStats();
+    renderNightLine();
     renderLog();
     renderEditor();
     renderChart();
@@ -2057,13 +1850,6 @@
     renderEditor();
   });
 
-  document.getElementById("viewPick").addEventListener("click", function (e) {
-    var v = e.target && e.target.getAttribute && e.target.getAttribute("data-v");
-    if (!v || v === S.statsView) return;
-    S.statsView = v;
-    save();
-    renderStats();
-  });
 
   /* ---------- innstillinger ---------- */
 
@@ -2429,6 +2215,6 @@
   setInterval(renderStage, 250);
   setInterval(save, 15000);
   // En natt som pågår vokser, så både stripen og tallene må følge med.
-  setInterval(function () { if (!editing) { renderStrip(); renderStats(); } }, 10000);
+  setInterval(function () { if (!editing) { renderStrip(); renderNightLine(); } }, 10000);
 })();
 </script>
