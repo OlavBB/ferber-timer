@@ -1512,14 +1512,24 @@
       if (ep.kind === "bedtime" && ep.asleepAt && bedMs === null) bedMs = stop - ep.startedAt;
     }
 
-    if (rec && rec.endedAt && rec.endedAt > end) end = rec.endedAt;
+    // Natten pågår så lenge en økt er i gang — også når hun sover, for da
+    // er siste hendelse jo bare øyeblikket hun sovnet. Den slutter når du
+    // trykker «Avslutt natten»; da settes endedAt og tellingen stopper.
+    // Neste dag er dette uansett ikke lenger dagens natt, så en natt du
+    // glemte å avslutte retter seg selv.
+    var ended = (rec && rec.endedAt && rec.endedAt > end) ? rec.endedAt : null;
+    var ongoing = isNow && S.phase !== "idle" && !ended;
+    if (ongoing) end = Math.max(end, Date.now());
+    else if (ended) end = ended;
 
     var total = Math.max(0, end - start);
     return {
       start: start, end: end, total: total,
       awake: awake, asleep: Math.max(0, total - awake),
       checks: checks, longest: longest, wakings: wakings,
-      bedMs: bedMs, open: open, running: !!runningStart
+      bedMs: bedMs, open: open,
+      running: !!runningStart,     // en våken økt er i gang nå
+      ongoing: ongoing             // natten er ikke avsluttet
     };
   }
 
@@ -1610,7 +1620,7 @@
     span.className = "span";
     var left = document.createElement("span");
     left.innerHTML = "<b>" + clockTime(s.start) + "</b> – <b>" +
-      clockTime(s.end) + "</b>" + (s.running ? " (pågår)" : "");
+      clockTime(s.end) + "</b>" + (s.ongoing ? " (pågår)" : "");
     var right = document.createElement("span");
     right.textContent = hm(s.total);
     span.appendChild(left); span.appendChild(right);
@@ -1761,8 +1771,8 @@
       }
     }
 
-    // «Nå»-streken hører bare hjemme mens noe faktisk pågår.
-    if (isNow && s.running) {
+    // «Nå»-streken hører hjemme så lenge natten ikke er avsluttet.
+    if (isNow && s.ongoing) {
       var nowLine = document.createElement("div");
       nowLine.className = "now";
       nowLine.style.left = pct(Date.now()) + "%";
@@ -2418,7 +2428,7 @@
   // vinduet er minimert og timeren strupes.
   setInterval(renderStage, 250);
   setInterval(save, 15000);
-  // Stripen trenger bare å følge med på at «nå»-streken flytter seg.
-  setInterval(function () { if (!editing) renderStrip(); }, 10000);
+  // En natt som pågår vokser, så både stripen og tallene må følge med.
+  setInterval(function () { if (!editing) { renderStrip(); renderStats(); } }, 10000);
 })();
 </script>
