@@ -1141,10 +1141,10 @@
     commit();
   }
 
-  function endNight() {
-    // En økt som fortsatt går tas vare på uten sluttid. Alternativet ville
-    // vært å late som hun sovnet akkurat nå, og det er verre enn et hull —
-    // tiden kan settes etterpå under «Endre denne natten».
+  // Legger en pågående økt i historikken uten å påstå når hun sovnet, og
+  // setter appen tilbake til ro. Et hull er ærligere enn et oppdiktet
+  // tidspunkt; tiden kan fylles inn i listen etterpå.
+  function parkEpisode() {
     if (S.episode && !S.episode.asleepAt) {
       if (S.phase === "checking") {
         S.episode.checks.push({ at: S.phaseStart, dur: Date.now() - S.phaseStart });
@@ -1158,22 +1158,37 @@
       S.history[k].episodes.push(S.episode);
       S.history[k].episodes.sort(function (a, b) { return a.startedAt - b.startedAt; });
     }
-    // Merker når natten ble avsluttet, så statistikken slutter å telle
-    // utover morgenen. Starter du en ny økt senere samme natt, ligger den
-    // etter dette tidspunktet og merket ses bort fra av seg selv.
-    // Nøkkelen tas fra økten, ikke fra klokka nå. Avslutter du natten
-    // etter kl. 12 ville today() pekt på neste natt.
-    var dag = S.episode ? nightKey(S.episode.startedAt) : today();
-    if (S.history[dag]) {
-      S.history[dag].wokeUpAt = Date.now();
-      S.history[dag].wokeUpEditedAt = Date.now();
-    }
-
     S.phase = "idle";
     S.episode = null;
     S.checkIndex = 0;
     releaseLock();
+  }
+
+  function endNight() {
+    // Nøkkelen tas fra økten, ikke fra klokka nå. Avslutter du natten
+    // etter kl. 12 ville today() pekt på neste natt.
+    var dag = S.episode ? nightKey(S.episode.startedAt) : today();
+    var na = Date.now();
+    parkEpisode();
+
+    // Morgenen stemples bare hvis «nå» faktisk ligger i den natten.
+    // Glemte du å trykke og gjør det først neste kveld, ville «nå» gitt
+    // et helt døgn med falsk søvn. Da lar vi den stå åpen i stedet, så
+    // du kan fylle inn riktig tid selv.
+    if (S.history[dag] && nightKey(na) === dag) {
+      S.history[dag].wokeUpAt = na;
+      S.history[dag].wokeUpEditedAt = na;
+    }
     commit();
+  }
+
+  // En natt som aldri ble avsluttet skal ikke leve videre inn i neste
+  // døgn. Uten dette står appen i «Hun sover» med gårsdagens økt, og
+  // natten vokser helt til du oppdager det.
+  function closeStaleNight() {
+    if (!S.episode || nightKey(S.episode.startedAt) === today()) return false;
+    parkEpisode();
+    return true;
   }
 
   function commit() {
@@ -1838,43 +1853,61 @@
       }
     }
 
-    // Siste søvnperiode og morgenen.
+    // Siste søvnperiode og morgenen. Morgenraden vises alltid — også mens
+    // natten pågår. Uten den finnes det ingen vei til å rette morgenen når
+    // du oppdager at du glemte å trykke.
     var sist = eps[eps.length - 1];
     var sistSlutt = sist.asleepAt;
     var oppe = rec && rec.wokeUpAt;
 
-    if (sistSlutt && oppe && oppe > sistSlutt) {
-      perRow(host, "sleep", "Sover", clockTime(sistSlutt) + "–" + clockTime(oppe),
-        hm(oppe - sistSlutt), null);
-    } else if (sistSlutt && !oppe && s && s.ongoing) {
-      perRow(host, "sleep", "Sover", clockTime(sistSlutt) + "–nå",
-        hm(Date.now() - sistSlutt), null);
+    if (sistSlutt) {
+      if (oppe && oppe > sistSlutt) {
+        perRow(host, "sleep", "Sover", clockTime(sistSlutt) + "–" + clockTime(oppe),
+          hm(oppe - sistSlutt), null);
+      } else if (s && s.ongoing) {
+        perRow(host, "sleep", "Sover", clockTime(sistSlutt) + "–nå",
+          hm(Date.now() - sistSlutt), null);
+      } else {
+        perRow(host, "sleep missing", "Sover", clockTime(sistSlutt) + "–?",
+          "mangler morgen", null);
+      }
     }
 
-    if (oppe) {
-      var r = perRow(host, "edge", "Sto opp", clockTime(oppe), "",
-        function () { openId = openId === "morgen" ? null : "morgen"; renderPeriods(); });
-      r.setAttribute("aria-expanded", openId === "morgen" ? "true" : "false");
-      if (openId === "morgen") {
-        var box = document.createElement("div");
-        box.className = "body";
-        box.appendChild(field("Sto opp", timeVal(day, oppe, function (ts) {
-          if (sistSlutt && ts < sistSlutt) return false;
-          rec.wokeUpAt = ts;
-          rec.wokeUpEditedAt = Date.now();
-          commit();
-          return true;
-        })));
-        host.appendChild(box);
+    function settMorgen(ts) {
+      if (sistSlutt && ts < sistSlutt) return false;
+      if (!S.history[day]) return false;
+      S.history[day].wokeUpAt = ts;
+      S.history[day].wokeUpEditedAt = Date.now();
+      commit();
+      return true;
+    }
+
+    // Rød bare når natten er over og morgenen mangler — mens hun fortsatt
+    // sover er en tom morgen helt normalt.
+    var mangler = !oppe && !(s && s.ongoing);
+    var mr = perRow(host, mangler ? "missing" : "edge", "Sto opp",
+      oppe ? clockTime(oppe) : "ikke satt", "",
+      function () { openId = openId === "morgen" ? null : "morgen"; renderPeriods(); });
+    mr.setAttribute("aria-expanded", openId === "morgen" ? "true" : "false");
+
+    if (openId === "morgen") {
+      var box = document.createElement("div");
+      box.className = "body";
+
+      var rad = document.createElement("div");
+      rad.className = "visit";
+      rad.appendChild(field("Sto opp", timeVal(day, oppe, settMorgen)));
+
+      if (!oppe) {
+        var na = document.createElement("button");
+        na.type = "button";
+        na.className = "addvisit";
+        na.textContent = "nå";
+        na.addEventListener("click", function () { settMorgen(Date.now()); });
+        rad.appendChild(na);
       }
-    } else if (!s || !s.ongoing) {
-      perRow(host, "missing", "Sto opp", "ikke satt", "", function () {
-        if (!S.history[day]) return;
-        S.history[day].wokeUpAt = sistSlutt || sist.startedAt;
-        S.history[day].wokeUpEditedAt = Date.now();
-        openId = "morgen";
-        commit();
-      });
+      box.appendChild(rad);
+      host.appendChild(box);
     }
 
     if (slettede.length) {
@@ -2374,12 +2407,17 @@
 
   load();
   loadIdentity();
+  var lukketGlemtNatt = closeStaleNight();
   if (S.phase === "idle") S.night = suggestNight();
   syncSound(); syncDim(); syncNotify();
   setSync(syncOn() ? "pending" : "off");
   if (S.phase !== "idle" && S.phase !== "asleep") requestLock();
 
   render();
+
+  // Lukket vi en glemt natt her, må den også lagres og deles med
+  // den andre enheten — ikke bare tegnes.
+  if (lukketGlemtNatt) { save(); schedulePush(); }
 
   if (syncOn()) {
     pullRemote();
@@ -2402,7 +2440,12 @@
   setInterval(renderStage, 250);
   setInterval(save, 15000);
   // En natt som pågår vokser, så både stripen og tallene må følge med.
-  setInterval(function () { if (openId === null) { renderStrip(); renderNightLine(); renderPeriods(); } }, 10000);
+  setInterval(function () {
+    // Fanger døgnskiftet mens appen står åpen: da lukkes en glemt natt
+    // av seg selv i stedet for å vokse videre.
+    if (closeStaleNight()) { save(); render(); schedulePush(); return; }
+    if (openId === null) { renderStrip(); renderNightLine(); renderPeriods(); }
+  }, 10000);
 })();
 </script>
 

@@ -9,7 +9,7 @@
 //   egne filer  -> hurtiglager først. Ikoner og manifest endrer seg sjelden.
 //   Supabase    -> røres ikke. Synken skal aldri lese et gammelt svar.
 
-const CACHE = "ferber-v1";
+const CACHE = "ferber-v2";
 
 const SKALL = [
   "./",
