@@ -207,7 +207,12 @@
 
   /* ---------- scenen: ringen ---------- */
 
-  .stage { position: relative; display: grid; place-items: center; }
+  /* Scenen er nøyaktig så bred som ringen. Ellers regnes teksten i midten
+     mot spaltebredden, og sprenger den indre ringen den skal ligge inni. */
+  .stage {
+    position: relative; display: grid; place-items: center;
+    width: min(92vw, 23rem); margin: 0 auto;
+  }
   .ring { width: min(92vw, 23rem); height: auto; display: block; overflow: visible; }
 
   /* Nedtellingen: en indre ring som bare finnes mens det telles ned. */
