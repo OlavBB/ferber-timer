@@ -9,7 +9,7 @@
 //   egne filer  -> hurtiglager først. Ikoner og manifest endrer seg sjelden.
 //   Supabase    -> røres ikke. Synken skal aldri lese et gammelt svar.
 
-const CACHE = "ferber-v2";
+const CACHE = "ferber-v3";
 
 const SKALL = [
   "./",
@@ -46,14 +46,20 @@ self.addEventListener("fetch", (e) => {
   if (url.origin !== self.location.origin) return;   // Supabase går rett på nettet
 
   if (req.mode === "navigate") {
+    // Bare appen selv får være frakoblet-reserven. Uten dette ville et
+    // besøk på en annen side under samme adresse — en prototype, for
+    // eksempel — blitt lagret som det du får se når nettet er borte.
+    const erAppen = url.pathname === new URL("./", self.location).pathname;
     e.respondWith(
       fetch(req)
         .then((res) => {
-          const kopi = res.clone();
-          caches.open(CACHE).then((c) => c.put("./", kopi));
+          if (erAppen && res.ok) {
+            const kopi = res.clone();
+            caches.open(CACHE).then((c) => c.put("./", kopi));
+          }
           return res;
         })
-        .catch(() => caches.match("./").then((r) => r || caches.match(req)))
+        .catch(() => caches.match(erAppen ? "./" : req).then((r) => r || caches.match("./")))
     );
     return;
   }
