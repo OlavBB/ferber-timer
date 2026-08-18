@@ -1854,17 +1854,12 @@
     });
 
     // Endene.
-    function ende(deg, type, tekst, mangler, velg) {
+    function ende(deg, type, mangler, velg) {
       var p = punkt(BUE.r, deg);
       var gr = node("g", { class: "ende" + (mangler ? " mangler" : "") });
       gr.appendChild(node("circle", { class: "skive", cx: p[0].toFixed(1), cy: p[1].toFixed(1), r: 16 }));
       if (type === "maane") gr.appendChild(maane(p[0] + 1.5, p[1], 6));
       else sol(gr, p[0], p[1], 6);
-
-      var lp = punkt(BUE.r + 32, deg);
-      var tx = node("text", { class: "elab", x: lp[0].toFixed(1), y: (lp[1] + 4).toFixed(1) });
-      tx.textContent = tekst;
-      gr.appendChild(tx);
 
       var hit = node("circle", { class: "treff", cx: p[0].toFixed(1), cy: p[1].toFixed(1), r: 24 });
       hit.addEventListener("click", velg);
@@ -1872,16 +1867,14 @@
       g.appendChild(gr);
     }
 
-    ende(BUE.fra, "maane", clockTime(s.start), false, function () {
+    ende(BUE.fra, "maane", false, function () {
       var id = epId(eps[0]);
       openId = openId === id ? null : id;
       renderDial(); renderDetail();
     });
 
     var oppe = rec && rec.wokeUpAt;
-    ende((BUE.fra + BUE.spenn) % 360, "sol",
-      oppe ? clockTime(oppe) : (s.ongoing ? "nå" : "?"),
-      !oppe && !s.ongoing,
+    ende((BUE.fra + BUE.spenn) % 360, "sol", !oppe && !s.ongoing,
       function () {
         openId = openId === "morgen" ? null : "morgen";
         renderDial(); renderDetail();
