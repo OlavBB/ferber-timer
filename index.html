@@ -266,6 +266,9 @@
   .readout {
     position: absolute;
     inset: 0;
+    /* Leseflaten ligger over hele ringen. Uten dette svelger den
+       trykkene som skulle truffet boblene under. */
+    pointer-events: none;
     display: flex;
     flex-direction: column;
     align-items: center;
