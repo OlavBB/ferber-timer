@@ -262,5 +262,35 @@ bolk("nattens lengde");
   tin();
 }
 
+/* ---------- antatt morgen ---------- */
+
+bolk("antatt morgen");
+{
+  const S = { history: {} };
+  const { estimertMorgen } = lag(S, ["estimertMorgen"]);
+  const morgen = (d, h, m) => new Date(2026, 7, d, h, m).getTime();
+
+  // Fire vanlige morgener rundt 06, og én utligger kl. 11.
+  S.history = {
+    "2026-08-10": { wokeUpAt: morgen(11, 6, 0) },
+    "2026-08-11": { wokeUpAt: morgen(12, 5, 50) },
+    "2026-08-12": { wokeUpAt: morgen(13, 6, 10) },
+    "2026-08-13": { wokeUpAt: morgen(14, 6, 20) },
+    "2026-08-14": { wokeUpAt: morgen(15, 11, 30) }
+  };
+  const d = new Date(estimertMorgen("2026-08-18"));
+  sjekk("utliggeren kl. 11 trekker ikke snittet", [d.getHours(), d.getMinutes()], [6, 5]);
+  sjekk("estimatet legges på morgenen etter nattens dato", [d.getDate(), d.getMonth()], [19, 7]);
+
+  // Natten man ser på skal ikke telle med i sitt eget estimat.
+  S.history["2026-08-18"] = { wokeUpAt: morgen(19, 9, 0) };
+  const e2 = new Date(estimertMorgen("2026-08-18"));
+  sjekk("egen natt holdes utenfor", [e2.getHours(), e2.getMinutes()], [6, 5]);
+
+  // For få netter gir ingen gjetning.
+  S.history = { "2026-08-10": { wokeUpAt: morgen(11, 6, 0) } };
+  sjekk("under to netter gir ingen gjetning", estimertMorgen("2026-08-18"), null);
+}
+
 console.log(feil ? `\n${feil} FEIL` : "\nalle tester passerte");
 process.exit(feil ? 1 : 0);

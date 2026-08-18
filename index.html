@@ -226,6 +226,10 @@
 
   /* Natten: en stille bue der hver hendelse er en boble. */
   .ring .natt { fill: none; stroke: color-mix(in srgb, var(--sage) 42%, var(--ground)); stroke-width: 3; }
+  .ring .natt.fremtid { stroke-dasharray: 2 6; opacity: .5; }
+  .ring .naa { stroke: var(--text); stroke-width: 2.5; stroke-linecap: round; }
+  .ring .ende.antatt .skive { stroke-dasharray: 3 3; }
+  .ring .ende.antatt .glyf, .ring .ende.antatt .straale { opacity: .5; }
   .ring .time { stroke: color-mix(in srgb, var(--text) 13%, transparent); stroke-width: 1; }
   .ring .tlab, .ring .elab {
     fill: var(--dim); font-family: var(--mono); font-size: 11px;
@@ -1758,6 +1762,29 @@
     }
   }
 
+  // Antatt morgen: snittet av tidligere netters stå-opp-tid, uten
+  // uteliggere. Brukes bare som buens ende mens natten pågår, så den
+  // ikke strekker seg for hvert minutt — og lagres aldri.
+  function estimertMorgen(day) {
+    var minutter = [];
+    for (var k in S.history) {
+      if (k === day || !Object.prototype.hasOwnProperty.call(S.history, k)) continue;
+      var w = S.history[k].wokeUpAt;
+      if (!w) continue;
+      var d = new Date(w);
+      minutter.push(d.getHours() * 60 + d.getMinutes());
+    }
+    if (minutter.length < 2) return null;
+
+    minutter.sort(function (a, b) { return a - b; });
+    var median = minutter[Math.floor(minutter.length / 2)];
+    var naere = minutter.filter(function (m) { return Math.abs(m - median) <= 90; });
+    var snitt = Math.round(naere.reduce(function (a, b) { return a + b; }, 0) / naere.length);
+
+    var p = day.split("-");
+    return new Date(+p[0], +p[1] - 1, +p[2] + 1, 0, 0, 0, 0).getTime() + snitt * 60000;
+  }
+
   function renderDial() {
     var g = document.getElementById("nattG");
     g.textContent = "";
@@ -1769,18 +1796,34 @@
 
     var rec = S.history[day];
     var fra = s.start;
-    var til = Math.max(s.end, fra + 36e5);            // minst en time å tegne på
+    var til = s.end;
+    var antatt = null;
+
+    // Mens natten pågår ender buen der vi tror hun står opp. Da ligger
+    // buen stille, og «nå» er det som beveger seg mot morgenen.
+    if (s.ongoing) {
+      antatt = estimertMorgen(day);
+      til = (antatt && antatt > Date.now()) ? antatt : Math.max(til, Date.now() + 18e5);
+    }
+    til = Math.max(til, fra + 36e5);                  // minst en time å tegne på
     var spenn = til - fra;
     var grad = function (ts) {
       var f = Math.max(0, Math.min(1, (ts - fra) / spenn));
       return (BUE.fra + f * BUE.spenn) % 360;
     };
 
-    // Den stille natten.
-    g.appendChild(node("path", {
-      class: "natt", "stroke-linecap": "round",
-      d: bueBane(BUE.r, BUE.fra, (BUE.fra + BUE.spenn) % 360)
-    }));
+    // Den stille natten. Det som gjenstår tegnes svakere.
+    var slutten = (BUE.fra + BUE.spenn) % 360;
+    if (s.ongoing) {
+      var dNa = grad(Date.now());
+      g.appendChild(node("path", { class: "natt", "stroke-linecap": "round",
+        d: bueBane(BUE.r, BUE.fra, dNa) }));
+      g.appendChild(node("path", { class: "natt fremtid", "stroke-linecap": "round",
+        d: bueBane(BUE.r, dNa, slutten) }));
+    } else {
+      g.appendChild(node("path", { class: "natt", "stroke-linecap": "round",
+        d: bueBane(BUE.r, BUE.fra, slutten) }));
+    }
 
     // Timemerker — bare de timene natten faktisk dekker.
     var t0 = new Date(fra);
@@ -1857,9 +1900,9 @@
     });
 
     // Endene.
-    function ende(deg, type, mangler, velg) {
+    function ende(deg, type, kl, velg) {
       var p = punkt(BUE.r, deg);
-      var gr = node("g", { class: "ende" + (mangler ? " mangler" : "") });
+      var gr = node("g", { class: "ende" + (kl ? " " + kl : "") });
       gr.appendChild(node("circle", { class: "skive", cx: p[0].toFixed(1), cy: p[1].toFixed(1), r: 16 }));
       if (type === "maane") gr.appendChild(maane(p[0] + 1.5, p[1], 6));
       else sol(gr, p[0], p[1], 6);
@@ -1870,18 +1913,29 @@
       g.appendChild(gr);
     }
 
-    ende(BUE.fra, "maane", false, function () {
+    ende(BUE.fra, "maane", "", function () {
       var id = epId(eps[0]);
       openId = openId === id ? null : id;
       renderDial(); renderDetail();
     });
 
     var oppe = rec && rec.wokeUpAt;
-    ende((BUE.fra + BUE.spenn) % 360, "sol", !oppe && !s.ongoing,
+    ende(slutten, "sol",
+      oppe ? "" : (s.ongoing ? (antatt ? "antatt" : "") : "mangler"),
       function () {
         openId = openId === "morgen" ? null : "morgen";
         renderDial(); renderDetail();
       });
+
+    // Hvor i natten vi er nå — tegnes sist, over alt annet.
+    if (s.ongoing) {
+      var dn = grad(Date.now());
+      var a0 = punkt(BUE.r - 12, dn), a1 = punkt(BUE.r + 12, dn);
+      g.appendChild(node("line", {
+        class: "naa", x1: a0[0].toFixed(1), y1: a0[1].toFixed(1),
+        x2: a1[0].toFixed(1), y2: a1[1].toFixed(1)
+      }));
+    }
   }
 
   /* ---------- det du har valgt ---------- */
@@ -2500,7 +2554,8 @@
     // Fanger døgnskiftet mens appen står åpen: da lukkes en glemt natt
     // av seg selv i stedet for å vokse videre.
     if (closeStaleNight()) { save(); render(); schedulePush(); return; }
-    if (openId === null) { renderDial(); renderNightLine(); renderDetail(); }
+    renderDial(); renderNightLine();
+    if (openId === null) renderDetail();
   }, 10000);
 })();
 </script>
