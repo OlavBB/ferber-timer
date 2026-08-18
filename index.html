@@ -466,6 +466,12 @@
     padding: .35rem .7rem;
     cursor: pointer;
   }
+  .chips button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .chips button[aria-pressed="true"] {
+    color: var(--amber);
+    border-color: var(--amber-lo);
+    background: color-mix(in srgb, var(--amber) 12%, transparent);
+  }
 
   .field {
     display: flex;
