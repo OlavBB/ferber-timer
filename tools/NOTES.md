@@ -25,13 +25,32 @@ ser bra ut på den tomme natten er ikke god nok.
 
 ## Svar
 
-_Fylles ut når valget er tatt._
+**A vant**, med tre endringer fra prototypen:
 
-Interessant tilbakemelding er som regel «headeren fra B med griping
-fra A» — deler, ikke hele varianter.
+- **Halvsirkel, ikke hele døgnet.** 220 grader som åpner nedover, og
+  bare de timene natten faktisk dekker. Timetallene ble helt fjernet —
+  buen dekker jo bare natten, så de sa lite.
+- **Ingen dra-og-slipp.** Den var upresis. Du trykker på en boble, og
+  retter i panelet.
+- **Hver hendelse er en boble**, ikke et buesegment. Brukerens eget
+  bilde: «hver hendelse som en boble på en ellers stille natt». Det
+  løste samtidig treffeproblemet — en tre minutters oppvåkning ble
+  under to piksler som segment, men får nå minst 22 px treffeflate.
+
+Lagt til utover forslagene:
+
+- Buen er **slått sammen med nedtellingen**. Ett objekt: natten ytterst,
+  nedtellingen som en indre ring som bare finnes når den teller, status
+  i midten.
+- Mens natten pågår ender buen ved **antatt stå-opp-tid** — snittet av
+  tidligere netter uten uteliggere — så buen ligger stille og «nå»
+  beveger seg mot morgenen.
+- **Månen er leggetiden**, sola er morgenen. Begge kan trykkes.
+
+B og C ble ikke brukt. C sin idé om å flagge det som ser rart ut lever
+videre i at besøk over minuttet farges røde.
 
 ## Etterpå
 
-Fold vinneren inn i `index.html` (skrevet ordentlig, ikke kopiert —
-prototypekoden har ingen tester og minimal feilhåndtering), slett
-`prototype-natten.html` og denne fila.
+Prototypen er foldet inn. `prototype-natten.html` og denne fila kan
+slettes når du er ferdig med å sammenligne.
