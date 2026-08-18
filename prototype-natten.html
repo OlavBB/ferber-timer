@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0C0B0F">
+<title>Prototype — natten så langt</title>
+
+<!--
+  PROTOTYPE. Kastes når valget er tatt. Se tools/NOTES.md.
+
+  Spørsmål: hvordan skal «Natten så langt» vises og rettes?
+  Tre varianter på samme rute, byttes med ?variant=A|B|C.
+
+  Leser virkelige netter fra Supabase (samme rom som appen, romnøkkelen
+  ligger allerede i localStorage her). Skriver ALDRI tilbake — alle
+  endringer lever i minnet til du laster siden på nytt. Den ekte appen
+  er i bruk hver natt og skal ikke kunne ødelegges herfra.
+-->
+
+<style>
+  :root {
+    --ground:#0C0B0F; --surface:#16141C; --raised:#1E1B27; --line:#2A2534;
+    --dim:#8E869B; --text:#EFE8E0; --amber:#F0A868; --amber-lo:#8A5C33;
+    --sage:#7FA88C; --rose:#CE7070;
+    --mono: ui-monospace,"Cascadia Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+    --serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--ground); color:var(--text);
+    font-family:var(--serif); font-size:16px; line-height:1.55;
+    -webkit-font-smoothing:antialiased; -webkit-tap-highlight-color:transparent;
+    padding-bottom:5.5rem;
+  }
+  .wrap { max-width:30rem; margin:0 auto; padding:1rem 1.1rem; }
+  @media (min-width:64rem) { .wrap { max-width:34rem; } }
+
+  .flag {
+    background:color-mix(in srgb, var(--rose) 16%, var(--ground));
+    border:1px solid color-mix(in srgb, var(--rose) 40%, var(--line));
+    border-radius:.5rem; padding:.5rem .7rem; margin-bottom:1rem;
+    font-family:var(--mono); font-size:.62rem; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--rose);
+  }
+  .lbl {
+    font-family:var(--mono); font-size:.62rem; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--dim);
+  }
+  .picker { display:flex; gap:.35rem; margin-bottom:1.2rem; }
+  .picker button {
+    flex:1; font-family:var(--mono); font-size:.66rem; letter-spacing:.06em;
+    color:var(--dim); background:var(--surface); border:1px solid var(--line);
+    border-radius:.5rem; padding:.5rem .3rem; cursor:pointer;
+  }
+  .picker button[aria-pressed="true"] {
+    color:var(--ground); background:var(--amber); border-color:var(--amber); font-weight:700;
+  }
+  .panel {
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:.9rem; padding:1.1rem 1.2rem;
+    display:flex; flex-direction:column; gap:.9rem;
+  }
+  .facts {
+    font-family:var(--mono); font-size:.74rem; font-variant-numeric:tabular-nums;
+    color:var(--dim); line-height:1.55;
+  }
+  .facts b { color:var(--text); font-weight:400; }
+  .facts .bad { color:var(--rose); }
+
+  /* verdien er feltet — felles for alle variantene */
+  input.v {
+    font-family:var(--mono); font-variant-numeric:tabular-nums;
+    color:var(--amber); background:transparent;
+    border:1px solid transparent; border-radius:.3rem;
+    padding:.1rem .25rem; cursor:pointer; font-size:inherit;
+  }
+  input.v:hover { border-color:var(--line); }
+  input.v:focus { outline:none; border-color:var(--amber-lo); background:var(--ground); color:var(--text); }
+  input.v.num { width:3.6rem; text-align:right; }
+  input.v.bad { color:var(--rose); }
+
+  /* ---------- A: døgnskive ---------- */
+
+  .dial { display:block; width:100%; max-width:22rem; margin:0 auto; touch-action:none; }
+  .dial .ring { fill:none; stroke:color-mix(in srgb,var(--sage) 30%,var(--ground)); }
+  .dial .awake { fill:none; stroke:var(--amber); cursor:pointer; }
+  .dial .awake.skip { stroke:var(--dim); opacity:.55; }
+  .dial .awake.sel { stroke:#fff; }
+  .dial .hit { fill:none; stroke:transparent; stroke-width:34; cursor:pointer; }
+  .dial .tick { stroke:var(--rose); stroke-width:2.5; }
+  .dial .hour { stroke:color-mix(in srgb,var(--text) 16%,transparent); stroke-width:1; }
+  .dial .hlab { fill:var(--dim); font-family:var(--mono); font-size:11px; text-anchor:middle; }
+  .dial .grip { fill:var(--ground); stroke:#fff; stroke-width:2.5; cursor:grab; }
+  .dial .grip:active { cursor:grabbing; }
+  .dial .mid { fill:var(--text); font-family:var(--mono); text-anchor:middle; }
+  .dial .midsub { fill:var(--dim); font-family:var(--mono); font-size:11px; text-anchor:middle; }
+
+  .sel {
+    border:1px solid var(--amber-lo); border-radius:.6rem; padding:.7rem .8rem;
+    display:flex; flex-direction:column; gap:.6rem;
+    background:color-mix(in srgb,var(--amber) 7%,transparent);
+  }
+  .selhead { display:flex; justify-content:space-between; align-items:baseline; }
+  .selhead .k { font-family:var(--mono); font-size:.62rem; letter-spacing:.14em; text-transform:uppercase; color:var(--amber); }
+  .row { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;
+    font-family:var(--mono); font-size:.66rem; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); }
+  .chips { display:flex; gap:.3rem; }
+  .chips button, .mini {
+    font-family:var(--mono); font-size:.6rem; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--dim); background:transparent; border:1px solid var(--line);
+    border-radius:999px; padding:.3rem .65rem; cursor:pointer;
+  }
+  .chips button[aria-pressed="true"] { color:var(--amber); border-color:var(--amber-lo); background:color-mix(in srgb,var(--amber) 12%,transparent); }
+  .mini { border-radius:.4rem; }
+  .mini:hover { color:var(--rose); border-color:color-mix(in srgb,var(--rose) 40%,var(--line)); }
+  .empty { color:var(--dim); font-style:italic; font-size:.88rem; margin:0; }
+
+  /* ---------- B: natten fortalt ---------- */
+
+  .tale { font-size:1.02rem; line-height:2.1; }
+  .tale p { margin:0 0 .9rem; }
+  .tale p:last-child { margin-bottom:0; }
+  .tale .who { color:var(--dim); }
+  .tale input.v { font-size:1rem; border-bottom:1px dotted var(--amber-lo); border-radius:0; }
+  .tale input.v:focus { border-bottom-color:var(--amber); }
+  .tale .sleep { color:var(--sage); }
+  .tale .warn { color:var(--rose); }
+  .tale .strike { opacity:.45; text-decoration:line-through; }
+  .tale .act {
+    font-family:var(--mono); font-size:.58rem; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--dim); background:transparent; border:0; cursor:pointer;
+    padding:0 .25rem; text-decoration:underline;
+  }
+  .tale .act:hover { color:var(--rose); }
+
+  /* ---------- C: gjennomgang ---------- */
+
+  .prog { display:flex; gap:3px; height:.55rem; }
+  .prog div { flex:1; border-radius:2px; background:var(--line); cursor:pointer; }
+  .prog div.done { background:color-mix(in srgb,var(--sage) 55%,var(--ground)); }
+  .prog div.now { background:var(--amber); }
+  .prog div.bad { background:var(--rose); }
+
+  .card {
+    border:1px solid var(--line); border-radius:.8rem; padding:1.2rem 1.1rem;
+    display:flex; flex-direction:column; gap:1rem; min-height:15rem;
+    background:var(--raised);
+  }
+  .card .step { font-family:var(--mono); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:var(--dim); }
+  .card .big { font-family:var(--mono); font-size:1.9rem; font-variant-numeric:tabular-nums; line-height:1.15; }
+  .card .say { font-size:.95rem; color:var(--dim); text-wrap:balance; }
+  .alert {
+    border-left:2px solid var(--rose); padding-left:.8rem;
+    font-size:.88rem; color:var(--rose);
+  }
+  .nav { display:flex; gap:.5rem; }
+  .nav button {
+    flex:1; font-family:var(--serif); font-size:1rem; color:var(--text);
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:.6rem; padding:.85rem; min-height:3.2rem; cursor:pointer;
+  }
+  .nav button.go { background:var(--amber); border-color:var(--amber); color:var(--ground); font-weight:700; }
+  .nav button:disabled { opacity:.35; cursor:default; }
+
+  /* ---------- variantbytter ---------- */
+
+  .switch {
+    position:fixed; left:50%; bottom:1rem; transform:translateX(-50%);
+    display:flex; align-items:stretch; gap:1px; z-index:50;
+    background:#fff; border-radius:999px; overflow:hidden;
+    box-shadow:0 6px 24px rgba(0,0,0,.6); font-family:var(--mono);
+  }
+  .switch button, .switch span { background:#fff; color:#111; border:0; }
+  .switch button { padding:.6rem .95rem; font-size:1rem; cursor:pointer; }
+  .switch button:hover { background:#e9e9e9; }
+  .switch span {
+    padding:.6rem .9rem; font-size:.68rem; letter-spacing:.06em;
+    display:flex; align-items:center; white-space:nowrap; min-width:11rem; justify-content:center;
+  }
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <div class="flag">Prototype · endringer lagres ikke · den ekte appen røres ikke</div>
+
+  <span class="lbl">Velg natt</span>
+  <div class="picker" id="picker"></div>
+
+  <div id="stage"></div>
+</div>
+
+<div class="switch" id="switch"></div>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------- data ---------- */
+
+var NETTER = {"2026-08-03":{"night":1,"episodes":[{"kind":"bedtime","checks":[{"at":1785778368250,"dur":10000},{"at":1785778399930,"dur":87688},{"at":1785779299869,"dur":10000}],"asleepAt":1785779950119,"editedAt":1785842876897,"startedAt":1785778365966},{"kind":"waking","checks":[{"at":1785793657321,"dur":99425},{"at":1785794148151,"dur":127569},{"at":1785795016447,"dur":95758},{"at":1785795720062,"dur":47425}],"asleepAt":1785796710708,"startedAt":1785793476052},{"kind":"waking","checks":[],"asleepAt":1785797029050,"startedAt":1785796829003},{"kind":"waking","checks":[{"at":1785809995809,"dur":10767},{"at":1785810325116,"dur":76706},{"at":1785811006309,"dur":64496}],"asleepAt":1785811709100,"startedAt":1785809795114},{"kind":"waking","checks":[{"at":1785812313546,"dur":20000}],"asleepAt":1785812735386,"editedAt":1785842881574,"startedAt":1785811753853}],"wokeUpAt":1785812735386,"wokeUpEditedAt":1786294005029},"2026-08-06":{"night":4,"episodes":[{"kind":"bedtime","checks":[],"asleepAt":1786036122845,"startedAt":1786035399682},{"kind":"waking","checks":[],"asleepAt":1786046100000,"editedAt":1786050360048,"startedAt":1786045495629},{"kind":"waking","checks":[{"at":1786051136947,"dur":90171}],"asleepAt":1786052086390,"startedAt":1786050384209},{"kind":"waking","checks":[],"asleepAt":1786052453557,"startedAt":1786052106804},{"kind":"waking","checks":[],"asleepAt":1786073520000,"editedAt":1786073817183,"startedAt":1786065808706},{"kind":"waking","checks":[{"at":1786074514047,"dur":74429}],"asleepAt":1786075040707,"startedAt":1786073749854},{"kind":"waking","checks":[],"asleepAt":1786076759750,"startedAt":1786075941695}],"wokeUpAt":1786076759750,"wokeUpEditedAt":1786293988834},"2026-08-15":{"night":7,"episodes":[{"id":"41d6125f8c872e4da47181fcb57d63c2","kind":"bedtime","checks":[],"asleepAt":1786812378364,"startedAt":1786812351055}],"wokeUpAt":1786852800000,"wokeUpEditedAt":1786902133056}};
+
+var day = null, S = null;          // S = arbeidskopi av valgt natt
+var variant = (new URLSearchParams(location.search).get("variant") || "A").toUpperCase();
+var VARIANTER = [
+  ["A", "Døgnskive"],
+  ["B", "Natten fortalt"],
+  ["C", "Gjennomgang"]
+];
+
+// Prøver de ekte dataene fra samme rom som appen. Romnøkkelen ligger i
+// localStorage på dette domenet allerede.
+(function hentEkte() {
+  var room = null;
+  try { room = localStorage.getItem("ferber.room"); } catch (e) {}
+  if (!room) return;
+  fetch("https://qtvztkxmnmxqlfhmvaou.supabase.co/rest/v1/rpc/ferber_get", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": "sb_publishable_DRQUN_14h1uR0mhHdZls2Q_uyq6fDun",
+      "Authorization": "Bearer sb_publishable_DRQUN_14h1uR0mhHdZls2Q_uyq6fDun"
+    },
+    body: JSON.stringify({ p_room: room })
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || !d.history) return;
+    var dager = Object.keys(d.history).sort().slice(-6);
+    var nye = {};
+    dager.forEach(function (k) { nye[k] = d.history[k]; });
+    if (!dager.length) return;
+    NETTER = nye;
+    velg(dager[dager.length - 1]);
+    tegnPicker();
+  }).catch(function () { /* beholder de innebygde nettene */ });
+})();
+
+/* ---------- tid ---------- */
+
+function kl(ts) {
+  var d = new Date(ts);
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+function mins(ms) { return Math.max(0, Math.round(ms / 60000)); }
+function hm(ms) {
+  var m = mins(ms);
+  return m >= 60 ? Math.floor(m / 60) + " t " + (m % 60) + " min" : m + " min";
+}
+function tilFelt(ts) { return kl(ts); }
+function anker(d) {
+  var p = d.split("-");
+  return new Date(+p[0], +p[1] - 1, +p[2], 12, 0, 0, 0).getTime();
+}
+function fraFelt(base, val) {
+  var m = /^(\d{1,2}):(\d{2})$/.exec(val || "");
+  if (!m) return null;
+  var d = new Date(base);
+  d.setHours(+m[1], +m[2], 0, 0);
+  var ts = d.getTime();
+  if (ts < base) ts += 864e5;
+  return ts;
+}
+
+/* ---------- arbeidskopi ---------- */
+
+function velg(d) {
+  day = d;
+  var rec = JSON.parse(JSON.stringify(NETTER[d]));
+  rec.episodes = rec.episodes.filter(function (e) { return !e.deleted; });
+  rec.episodes.sort(function (a, b) { return a.startedAt - b.startedAt; });
+  rec.episodes.forEach(function (e, i) { if (!e.id) e.id = "e" + i; });
+  S = rec;
+  valgtId = S.episodes.length ? S.episodes[0].id : null;
+  steg = 0;
+  tegn();
+}
+
+function eps() { return S.episodes.filter(function (e) { return !e.deleted; }); }
+function finn(id) {
+  var a = eps();
+  for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i];
+  return null;
+}
+function sortEps() { S.episodes.sort(function (a, b) { return a.startedAt - b.startedAt; }); }
+
+function oppsummering() {
+  var a = eps();
+  if (!a.length) return null;
+  var start = a[0].startedAt, slutt = start;
+  var vaken = 0, besok = 0, lengst = 0, oppv = 0, seng = null, apne = 0;
+  a.forEach(function (e) {
+    var s = e.asleepAt;
+    if (s === null || s === undefined) { apne++; s = e.startedAt; }
+    if (s > slutt) slutt = s;
+    if (e.skip) return;
+    vaken += s - e.startedAt;
+    besok += e.checks.length;
+    e.checks.forEach(function (c) { if (c.dur > lengst) lengst = c.dur; });
+    if (e.kind === "waking") oppv++;
+    if (e.kind === "bedtime" && e.asleepAt && seng === null) seng = s - e.startedAt;
+  });
+  if (S.wokeUpAt && S.wokeUpAt > slutt) slutt = S.wokeUpAt;
+  var total = Math.max(0, slutt - start);
+  return { start: start, slutt: slutt, total: total, vaken: vaken,
+    sover: Math.max(0, total - vaken), besok: besok, lengst: lengst,
+    oppv: oppv, seng: seng, apne: apne };
+}
+
+/* ---------- små byggeklosser ---------- */
+
+function el(tag, cls, txt) {
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (txt !== undefined) e.textContent = txt;
+  return e;
+}
+
+// Tidsfelt der verdien selv er inndataen.
+function tid(verdi, bruk, cls) {
+  var i = el("input", "v " + (cls || ""));
+  i.type = "time";
+  i.value = verdi ? tilFelt(verdi) : "";
+  i.addEventListener("change", function () {
+    var ts = fraFelt(anker(day), i.value);
+    if (ts === null || bruk(ts) === false) { i.value = verdi ? tilFelt(verdi) : ""; }
+    else { sortEps(); tegn(); }
+  });
+  i.addEventListener("keydown", function (e) { e.stopPropagation(); });
+  return i;
+}
+
+function sekfelt(chk, ep) {
+  var i = el("input", "v num" + (chk.dur > 60000 ? " bad" : ""));
+  i.type = "number"; i.min = "0"; i.step = "5";
+  i.value = Math.round(chk.dur / 1000);
+  i.addEventListener("change", function () {
+    var v = +i.value;
+    if (isFinite(v) && v >= 0) { chk.dur = Math.round(v) * 1000; tegn(); }
+  });
+  i.addEventListener("keydown", function (e) { e.stopPropagation(); });
+  return i;
+}
+
+// Hva ser rart ut? Brukes av C, og farger merker i A og B.
+function funn(ep) {
+  var ut = [];
+  if (ep.asleepAt === null || ep.asleepAt === undefined) ut.push("mangler sluttid");
+  else if (ep.asleepAt - ep.startedAt < 60000) ut.push("varte under ett minutt");
+  ep.checks.forEach(function (c, i) {
+    if (c.dur < 5000) ut.push("besøk " + (i + 1) + " varte bare " + Math.round(c.dur / 1000) + " s — feiltrykk?");
+    else if (c.dur > 60000) ut.push("besøk " + (i + 1) + " varte " + Math.round(c.dur / 1000) + " s — over anbefalt minutt");
+  });
+  return ut;
+}
+
+/* ======================================================================
+   A — DØGNSKIVE. Napper-aktig: natten plottes på et 24-timers ur,
+   du trykker rett på buen og drar i endene.
+   ====================================================================== */
+
+var valgtId = null;
+
+function variantA(vert) {
+  var a = eps();
+  var s = oppsummering();
+  var p = el("div", "panel");
+
+  if (!a.length) { p.appendChild(el("p", "empty", "Ingenting registrert denne natten.")); vert.appendChild(p); return; }
+
+  var NS = "http://www.w3.org/2000/svg";
+  var svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 320 320");
+  svg.setAttribute("class", "dial");
+  var C = 160, R = 122, W = 26;
+
+  function vinkel(ts) {
+    var d = new Date(ts);
+    return ((d.getHours() + d.getMinutes() / 60) / 24) * 360;
+  }
+  function xy(r, deg) {
+    var rad = (deg - 90) * Math.PI / 180;
+    return [C + r * Math.cos(rad), C + r * Math.sin(rad)];
+  }
+  function bue(r, a0, a1) {
+    var d = (a1 - a0 + 360) % 360;
+    if (d < 0.4) d = 0.4;
+    var p0 = xy(r, a0), p1 = xy(r, a0 + d);
+    return "M" + p0[0] + " " + p0[1] + " A" + r + " " + r + " 0 " + (d > 180 ? 1 : 0) + " 1 " + p1[0] + " " + p1[1];
+  }
+
+  // timeringen
+  for (var h = 0; h < 24; h++) {
+    var deg = h / 24 * 360;
+    var i0 = xy(R - W / 2 - 3, deg), i1 = xy(R + W / 2 + 3, deg);
+    var ln = document.createElementNS(NS, "line");
+    ln.setAttribute("class", "hour");
+    ln.setAttribute("x1", i0[0]); ln.setAttribute("y1", i0[1]);
+    ln.setAttribute("x2", i1[0]); ln.setAttribute("y2", i1[1]);
+    svg.appendChild(ln);
+    if (h % 3 === 0) {
+      var lp = xy(R + W / 2 + 15, deg);
+      var tx = document.createElementNS(NS, "text");
+      tx.setAttribute("class", "hlab");
+      tx.setAttribute("x", lp[0]); tx.setAttribute("y", lp[1] + 4);
+      tx.textContent = String(h).padStart(2, "0");
+      svg.appendChild(tx);
+    }
+  }
+
+  // søvn som grunnring
+  var ring = document.createElementNS(NS, "path");
+  ring.setAttribute("class", "ring");
+  ring.setAttribute("stroke-width", W);
+  ring.setAttribute("d", bue(R, vinkel(s.start), vinkel(s.slutt)));
+  svg.appendChild(ring);
+
+  // våkne bolker
+  a.forEach(function (ep) {
+    var slutt = ep.asleepAt || ep.startedAt + 6e5;
+    var d = document.createElementNS(NS, "path");
+    d.setAttribute("class", "awake" + (ep.skip ? " skip" : "") + (ep.id === valgtId ? " sel" : ""));
+    d.setAttribute("stroke-width", ep.id === valgtId ? W + 4 : W);
+    d.setAttribute("stroke-linecap", "butt");
+    d.setAttribute("d", bue(R, vinkel(ep.startedAt), vinkel(slutt)));
+    svg.appendChild(d);
+
+    var hit = document.createElementNS(NS, "path");
+    hit.setAttribute("class", "hit");
+    hit.setAttribute("d", bue(R, vinkel(ep.startedAt), vinkel(slutt)));
+    hit.addEventListener("click", function () { valgtId = ep.id; tegn(); });
+    svg.appendChild(hit);
+
+    ep.checks.forEach(function (c) {
+      var v = vinkel(c.at), q0 = xy(R - W / 2, v), q1 = xy(R + W / 2, v);
+      var t = document.createElementNS(NS, "line");
+      t.setAttribute("class", "tick");
+      t.setAttribute("x1", q0[0]); t.setAttribute("y1", q0[1]);
+      t.setAttribute("x2", q1[0]); t.setAttribute("y2", q1[1]);
+      svg.appendChild(t);
+    });
+  });
+
+  // draghåndtak på den valgte
+  var valgt = finn(valgtId);
+  if (valgt) {
+    [["startedAt", valgt.startedAt], ["asleepAt", valgt.asleepAt]].forEach(function (par) {
+      if (par[1] === null || par[1] === undefined) return;
+      var g = document.createElementNS(NS, "circle");
+      var pt = xy(R, vinkel(par[1]));
+      g.setAttribute("class", "grip");
+      g.setAttribute("cx", pt[0]); g.setAttribute("cy", pt[1]); g.setAttribute("r", 9);
+      g.addEventListener("pointerdown", function (ev) {
+        ev.preventDefault();
+        g.setPointerCapture(ev.pointerId);
+        function flytt(e2) {
+          var r = svg.getBoundingClientRect();
+          var mx = (e2.clientX - r.left) / r.width * 320 - C;
+          var my = (e2.clientY - r.top) / r.height * 320 - C;
+          var deg = (Math.atan2(my, mx) * 180 / Math.PI + 90 + 360) % 360;
+          var timer = deg / 360 * 24;
+          var snap = Math.round(timer * 12) / 12;             // 5 minutter
+          // Velger det døgnet som ligger nærmest verdien du drar i.
+          var d0 = new Date(par[1]);
+          d0.setHours(Math.floor(snap), Math.round((snap % 1) * 60), 0, 0);
+          var kand = [d0.getTime(), d0.getTime() - 864e5, d0.getTime() + 864e5];
+          var ny = kand.reduce(function (best, k) {
+            return Math.abs(k - par[1]) < Math.abs(best - par[1]) ? k : best;
+          });
+          if (par[0] === "startedAt" && valgt.asleepAt && ny >= valgt.asleepAt) return;
+          if (par[0] === "asleepAt" && ny <= valgt.startedAt) return;
+          valgt[par[0]] = ny;
+          sortEps();
+          tegn();
+        }
+        g.addEventListener("pointermove", flytt);
+        g.addEventListener("pointerup", function () {
+          g.removeEventListener("pointermove", flytt);
+        }, { once: true });
+      });
+      svg.appendChild(g);
+    });
+  }
+
+  var m1 = document.createElementNS(NS, "text");
+  m1.setAttribute("class", "mid");
+  m1.setAttribute("x", C); m1.setAttribute("y", C - 4);
+  m1.setAttribute("font-size", "26");
+  m1.textContent = hm(s.sover);
+  svg.appendChild(m1);
+  var m2 = document.createElementNS(NS, "text");
+  m2.setAttribute("class", "midsub");
+  m2.setAttribute("x", C); m2.setAttribute("y", C + 16);
+  m2.textContent = "søvn · våken " + hm(s.vaken);
+  svg.appendChild(m2);
+
+  p.appendChild(svg);
+
+  if (valgt) {
+    var box = el("div", "sel");
+    var hd = el("div", "selhead");
+    hd.appendChild(el("span", "k", valgt.skip ? "Utenom" :
+      (valgt === a[0] ? "Lagt ned" : "Oppvåkning")));
+    hd.appendChild(el("span", "facts", valgt.asleepAt ? hm(valgt.asleepAt - valgt.startedAt) : "uten sluttid"));
+    box.appendChild(hd);
+
+    var r1 = el("div", "row");
+    r1.appendChild(document.createTextNode("Våknet"));
+    r1.appendChild(tid(valgt.startedAt, function (ts) {
+      if (valgt.asleepAt && ts >= valgt.asleepAt) return false;
+      valgt.startedAt = ts;
+    }));
+    r1.appendChild(document.createTextNode("Sovnet"));
+    r1.appendChild(tid(valgt.asleepAt, function (ts) {
+      if (ts <= valgt.startedAt) return false;
+      valgt.asleepAt = ts;
+    }));
+    box.appendChild(r1);
+
+    valgt.checks.forEach(function (c, i) {
+      var rv = el("div", "row");
+      rv.appendChild(document.createTextNode("Besøk " + (i + 1)));
+      rv.appendChild(tid(c.at, function (ts) { c.at = ts; }));
+      rv.appendChild(sekfelt(c, valgt));
+      rv.appendChild(document.createTextNode("sek"));
+      var x = el("button", "mini", "fjern");
+      x.addEventListener("click", function () { valgt.checks.splice(i, 1); tegn(); });
+      rv.appendChild(x);
+      box.appendChild(rv);
+    });
+
+    var ch = el("div", "chips");
+    [["nei", "Våken"], ["ja", "Utenom"]].forEach(function (o) {
+      var b = el("button", null, o[1]);
+      b.setAttribute("aria-pressed", (o[0] === "ja") === !!valgt.skip ? "true" : "false");
+      b.addEventListener("click", function () { valgt.skip = o[0] === "ja"; tegn(); });
+      ch.appendChild(b);
+    });
+    box.appendChild(ch);
+    p.appendChild(box);
+  }
+
+  p.appendChild(nattlinje(s));
+  vert.appendChild(p);
+}
+
+function nattlinje(s) {
+  var f = el("div", "facts");
+  var sek = Math.round(s.lengst / 1000);
+  f.innerHTML = "<b>" + kl(s.start) + "–" + kl(s.slutt) + "</b> · " + hm(s.total) +
+    " · våken <b>" + hm(s.vaken) + "</b> · " + s.oppv + " oppvåkninger" +
+    (s.besok ? " · " + s.besok + " besøk, lengste " +
+      (sek > 60 ? "<span class='bad'>" + sek + " s</span>" : sek + " s") : "");
+  return f;
+}
+
+/* ======================================================================
+   B — NATTEN FORTALT. Natten som setninger. Tallene i teksten er
+   feltene; du retter der du leser.
+   ====================================================================== */
+
+function variantB(vert) {
+  var a = eps();
+  var s = oppsummering();
+  var p = el("div", "panel");
+  if (!a.length) { p.appendChild(el("p", "empty", "Ingenting registrert denne natten.")); vert.appendChild(p); return; }
+
+  var t = el("div", "tale");
+
+  a.forEach(function (ep, i) {
+    var par = el("p");
+    if (ep.deleted) par.className = "strike";
+
+    par.appendChild(el("span", "who", i === 0 ? "Du la henne " : "Hun våknet "));
+    par.appendChild(tid(ep.startedAt, function (ts) {
+      if (ep.asleepAt && ts >= ep.asleepAt) return false;
+      ep.startedAt = ts;
+    }));
+
+    if (ep.asleepAt) {
+      par.appendChild(el("span", "who", ep.skip ? " og var oppe til " : " og sovnet "));
+      par.appendChild(tid(ep.asleepAt, function (ts) {
+        if (ts <= ep.startedAt) return false;
+        ep.asleepAt = ts;
+      }));
+      var lengde = mins(ep.asleepAt - ep.startedAt);
+      par.appendChild(el("span", "who", " — " + lengde + " minutter"));
+    } else {
+      par.appendChild(el("span", "warn", " og du vet ikke når hun sovnet: "));
+      par.appendChild(tid(null, function (ts) {
+        if (ts <= ep.startedAt) return false;
+        ep.asleepAt = ts;
+      }));
+    }
+
+    if (ep.checks.length) {
+      par.appendChild(el("span", "who", ". Du var inne "));
+      ep.checks.forEach(function (c, j) {
+        if (j) par.appendChild(el("span", "who", j === ep.checks.length - 1 ? " og " : ", "));
+        par.appendChild(tid(c.at, function (ts) { c.at = ts; }));
+        par.appendChild(el("span", "who", " i "));
+        par.appendChild(sekfelt(c, ep));
+        par.appendChild(el("span", c.dur > 60000 ? "warn" : "who", " sek"));
+      });
+    }
+    par.appendChild(el("span", "who", "."));
+
+    var sk = el("button", "act", ep.skip ? "tell med igjen" : "utenom");
+    sk.addEventListener("click", function () { ep.skip = !ep.skip; tegn(); });
+    par.appendChild(sk);
+    var dl = el("button", "act", "slett");
+    dl.addEventListener("click", function () { ep.deleted = true; tegn(); });
+    par.appendChild(dl);
+
+    t.appendChild(par);
+
+    var neste = a[i + 1];
+    if (ep.asleepAt && neste && neste.startedAt > ep.asleepAt) {
+      var sp = el("p", "sleep");
+      sp.textContent = "Så sov hun i " + hm(neste.startedAt - ep.asleepAt) + ".";
+      t.appendChild(sp);
+    }
+  });
+
+  var sist = a[a.length - 1];
+  var mp = el("p");
+  if (S.wokeUpAt && sist.asleepAt && S.wokeUpAt > sist.asleepAt) {
+    mp.className = "sleep";
+    mp.appendChild(document.createTextNode("Så sov hun i " + hm(S.wokeUpAt - sist.asleepAt) + ", til du hentet henne "));
+  } else {
+    mp.appendChild(el("span", "warn", "Du har ikke sagt når hun sto opp: "));
+  }
+  mp.appendChild(tid(S.wokeUpAt, function (ts) {
+    if (sist.asleepAt && ts < sist.asleepAt) return false;
+    S.wokeUpAt = ts;
+  }));
+  mp.appendChild(document.createTextNode("."));
+  t.appendChild(mp);
+
+  p.appendChild(t);
+  p.appendChild(nattlinje(s));
+  vert.appendChild(p);
+}
+
+/* ======================================================================
+   C — GJENNOMGANG. Én hendelse om gangen, stor. Appen sier hva den
+   synes ser rart ut, du bekrefter eller retter.
+   ====================================================================== */
+
+var steg = 0;
+
+function variantC(vert) {
+  var a = eps();
+  var p = el("div", "panel");
+  if (!a.length) { p.appendChild(el("p", "empty", "Ingenting registrert denne natten.")); vert.appendChild(p); return; }
+
+  var s = oppsummering();
+  var antall = a.length + 1;                 // + morgenen
+  if (steg >= antall) steg = antall - 1;
+  if (steg < 0) steg = 0;
+
+  var pr = el("div", "prog");
+  for (var i = 0; i < antall; i++) {
+    (function (i) {
+      var d = el("div");
+      var daarlig = i < a.length ? funn(a[i]).length : (S.wokeUpAt ? 0 : 1);
+      d.className = i === steg ? "now" : (daarlig ? "bad" : (i < steg ? "done" : ""));
+      d.addEventListener("click", function () { steg = i; tegn(); });
+      pr.appendChild(d);
+    })(i);
+  }
+  p.appendChild(pr);
+
+  var card = el("div", "card");
+
+  if (steg < a.length) {
+    var ep = a[steg];
+    var f = funn(ep);
+
+    card.appendChild(el("span", "step", "Hendelse " + (steg + 1) + " av " + antall +
+      " · " + (ep.skip ? "utenom" : steg === 0 ? "lagt ned" : "oppvåkning")));
+
+    var big = el("div", "big");
+    big.appendChild(tid(ep.startedAt, function (ts) {
+      if (ep.asleepAt && ts >= ep.asleepAt) return false;
+      ep.startedAt = ts;
+    }));
+    big.appendChild(document.createTextNode(" → "));
+    big.appendChild(tid(ep.asleepAt, function (ts) {
+      if (ts <= ep.startedAt) return false;
+      ep.asleepAt = ts;
+    }));
+    card.appendChild(big);
+
+    card.appendChild(el("div", "say", ep.asleepAt
+      ? (steg === 0 ? "Hun brukte " : "Hun var våken i ") + hm(ep.asleepAt - ep.startedAt) +
+        (ep.checks.length ? ", og du var inne " + ep.checks.length + " gang" +
+          (ep.checks.length > 1 ? "er" : "") + "." : ", uten at du gikk inn.")
+      : "Denne har ingen sluttid."));
+
+    ep.checks.forEach(function (c, j) {
+      var rv = el("div", "row");
+      rv.appendChild(document.createTextNode("Besøk " + (j + 1)));
+      rv.appendChild(tid(c.at, function (ts) { c.at = ts; }));
+      rv.appendChild(sekfelt(c, ep));
+      rv.appendChild(document.createTextNode("sek"));
+      var x = el("button", "mini", "feiltrykk");
+      x.addEventListener("click", function () { ep.checks.splice(j, 1); tegn(); });
+      rv.appendChild(x);
+      card.appendChild(rv);
+    });
+
+    f.forEach(function (m) { card.appendChild(el("div", "alert", m)); });
+
+    var ch = el("div", "chips");
+    [["nei", "Våken"], ["ja", "Utenom"]].forEach(function (o) {
+      var b = el("button", null, o[1]);
+      b.setAttribute("aria-pressed", (o[0] === "ja") === !!ep.skip ? "true" : "false");
+      b.addEventListener("click", function () { ep.skip = o[0] === "ja"; tegn(); });
+      ch.appendChild(b);
+    });
+    card.appendChild(ch);
+
+  } else {
+    card.appendChild(el("span", "step", "Hendelse " + antall + " av " + antall + " · morgenen"));
+    var b2 = el("div", "big");
+    b2.appendChild(tid(S.wokeUpAt, function (ts) {
+      var sist = a[a.length - 1];
+      if (sist.asleepAt && ts < sist.asleepAt) return false;
+      S.wokeUpAt = ts;
+    }));
+    card.appendChild(b2);
+    card.appendChild(el("div", "say", S.wokeUpAt
+      ? "Hun sto opp " + kl(S.wokeUpAt) + ". Natten ble " + hm(s.total) + "."
+      : "Når hentet du henne? Uten dette vet ikke appen hvor natten slutter."));
+    if (!S.wokeUpAt) card.appendChild(el("div", "alert", "mangler morgen"));
+  }
+
+  p.appendChild(card);
+
+  var nav = el("div", "nav");
+  var bak = el("button", null, "Forrige");
+  bak.disabled = steg === 0;
+  bak.addEventListener("click", function () { steg--; tegn(); });
+  var fram = el("button", "go", steg === antall - 1 ? "Ferdig" : "Ser riktig ut");
+  fram.addEventListener("click", function () { if (steg < antall - 1) { steg++; tegn(); } });
+  nav.appendChild(bak); nav.appendChild(fram);
+  p.appendChild(nav);
+
+  p.appendChild(nattlinje(s));
+  vert.appendChild(p);
+}
+
+/* ---------- rammeverk ---------- */
+
+function tegnPicker() {
+  var pk = document.getElementById("picker");
+  pk.textContent = "";
+  Object.keys(NETTER).sort().forEach(function (d) {
+    var rec = NETTER[d];
+    var n = rec.episodes.filter(function (e) { return !e.deleted; }).length;
+    var b = el("button", null, d.slice(8) + "." + d.slice(5, 7) + " · " + n + " økt" + (n === 1 ? "" : "er"));
+    b.setAttribute("aria-pressed", d === day ? "true" : "false");
+    b.addEventListener("click", function () { velg(d); });
+    pk.appendChild(b);
+  });
+}
+
+function tegn() {
+  tegnPicker();
+  var st = document.getElementById("stage");
+  st.textContent = "";
+  if (variant === "B") variantB(st);
+  else if (variant === "C") variantC(st);
+  else variantA(st);
+  tegnSwitch();
+}
+
+function tegnSwitch() {
+  var sw = document.getElementById("switch");
+  sw.textContent = "";
+  var i = VARIANTER.findIndex(function (v) { return v[0] === variant; });
+  if (i < 0) i = 0;
+
+  function gaa(d) {
+    var n = VARIANTER[(i + d + VARIANTER.length) % VARIANTER.length][0];
+    variant = n;
+    var u = new URL(location.href);
+    u.searchParams.set("variant", n);
+    history.replaceState(null, "", u);
+    tegn();
+  }
+  var v = el("button", null, "‹");
+  v.addEventListener("click", function () { gaa(-1); });
+  var h = el("button", null, "›");
+  h.addEventListener("click", function () { gaa(1); });
+  sw.appendChild(v);
+  sw.appendChild(el("span", null, VARIANTER[i][0] + " — " + VARIANTER[i][1]));
+  sw.appendChild(h);
+
+  if (!sw.dataset.tast) {
+    sw.dataset.tast = "1";
+    document.addEventListener("keydown", function (e) {
+      var t = e.target && e.target.tagName;
+      if (t === "INPUT" || t === "TEXTAREA" || (e.target && e.target.isContentEditable)) return;
+      if (e.key === "ArrowLeft") gaa(-1);
+      if (e.key === "ArrowRight") gaa(1);
+    });
+  }
+}
+
+velg(Object.keys(NETTER).sort()[0]);
+})();
+</script>
+</body>
+</html>
