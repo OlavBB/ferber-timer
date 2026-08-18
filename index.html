@@ -1711,7 +1711,7 @@
   // begge spørsmålene: hva skjer nå, og hvordan har natten gått.
 
   var SVGNS = "http://www.w3.org/2000/svg";
-  var BUE = { cx: 180, cy: 168, r: 136, fra: 250, spenn: 220 };
+  var BUE = { cx: 180, cy: 168, r: 126, fra: 250, spenn: 220 };
 
   function node(navn, attr) {
     var e = document.createElementNS(SVGNS, navn);
@@ -1783,27 +1783,20 @@
     var t0 = new Date(fra);
     t0.setMinutes(0, 0, 0);
     for (var t = t0.getTime() + 36e5; t < til; t += 36e5) {
-      var d = grad(t), h = new Date(t).getHours();
+      var d = grad(t);
       var i0 = punkt(BUE.r - 5, d), i1 = punkt(BUE.r + 5, d);
       g.appendChild(node("line", {
         class: "time", x1: i0[0].toFixed(1), y1: i0[1].toFixed(1),
         x2: i1[0].toFixed(1), y2: i1[1].toFixed(1)
       }));
-      if (h % 2 === 0) {
-        var lp = punkt(BUE.r + 24, d);
-        var tx = node("text", { class: "tlab", x: lp[0].toFixed(1), y: (lp[1] + 4).toFixed(1) });
-        tx.textContent = String(h).padStart(2, "0");
-        g.appendChild(tx);
-      }
     }
 
     // Boblene. Radius etter hvor lenge hun var våken; ligger to hendelser
     // tett i tid, dyttes den ene utover så begge blir mulige å treffe.
-    // Endemerkene er også noe boblene må vike for.
     var ende0 = punkt(BUE.r, BUE.fra), ende1 = punkt(BUE.r, (BUE.fra + BUE.spenn) % 360);
     var lagt = [
-      { x: ende0[0], y: ende0[1], r: 17 },
-      { x: ende1[0], y: ende1[1], r: 17 }
+      { x: ende0[0], y: ende0[1], r: 18 },
+      { x: ende1[0], y: ende1[1], r: 18 }
     ];
     eps.forEach(function (ep, i) {
       var siste = i === eps.length - 1;
@@ -1815,7 +1808,7 @@
       // Ligger noe i veien, prøver vi utover og innover etter tur, og
       // aldri så langt at boblen havner utenfor tegneflata.
       var steg = r + 13, p = punkt(BUE.r, d), best = null;
-      var kandidater = [0, steg, -steg, steg * 2, -steg * 2];
+      var kandidater = [0, steg, steg * 2, steg * 3];
       for (var k = 0; k < kandidater.length; k++) {
         var q = punkt(BUE.r + kandidater[k], d);
         if (q[0] - r < 1 || q[0] + r > 359 || q[1] - r < 1 || q[1] + r > 335) continue;
@@ -1829,7 +1822,8 @@
       lagt.push({ x: p[0], y: p[1], r: r });
 
       var valgt = openId === epId(ep);
-      g.appendChild(node("circle", {
+      // Kveldens egen økt har allerede månen som merke.
+      if (i > 0) g.appendChild(node("circle", {
         class: "boble" + (ep.skip ? " utenom" : "") +
                (!ep.asleepAt && !(s.running && siste) ? " apen" : "") +
                (valgt ? " valgt" : ""),
@@ -1846,15 +1840,17 @@
       });
 
       // Treffeflaten er minst 22, uansett hvor liten boblen er.
-      var hit = node("circle", {
-        class: "treff", cx: p[0].toFixed(1), cy: p[1].toFixed(1),
-        r: Math.max(r, 22).toFixed(1)
-      });
-      hit.addEventListener("click", function () {
-        openId = valgt ? null : epId(ep);
-        renderDial(); renderDetail();
-      });
-      g.appendChild(hit);
+      if (i > 0) {
+        var hit = node("circle", {
+          class: "treff", cx: p[0].toFixed(1), cy: p[1].toFixed(1),
+          r: Math.max(r, 22).toFixed(1)
+        });
+        hit.addEventListener("click", function () {
+          openId = valgt ? null : epId(ep);
+          renderDial(); renderDetail();
+        });
+        g.appendChild(hit);
+      }
     });
 
     // Endene.
@@ -1865,7 +1861,7 @@
       if (type === "maane") gr.appendChild(maane(p[0] + 1.5, p[1], 6));
       else sol(gr, p[0], p[1], 6);
 
-      var lp = punkt(BUE.r + 34, deg);
+      var lp = punkt(BUE.r + 32, deg);
       var tx = node("text", { class: "elab", x: lp[0].toFixed(1), y: (lp[1] + 4).toFixed(1) });
       tx.textContent = tekst;
       gr.appendChild(tx);

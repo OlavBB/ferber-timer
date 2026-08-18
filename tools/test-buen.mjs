@@ -96,10 +96,11 @@ for (const [dag, rec] of Object.entries(netter)) {
 
   console.log(`\n--- ${dag} (${forventet} økter) ---`);
   sjekk("ingen krasj", krasj, null);
-  sjekk("én boble per økt", antBobler, forventet);
+  // Kveldens økt har månen som merke, så den får ingen egen boble.
+  sjekk("én boble per oppvåkning", antBobler, Math.max(0, forventet - 1));
   sjekk("den stille buen tegnes", kl.includes("natt"), true);
   sjekk("begge endene finnes", g.klasser().filter((c) => c.startsWith("ende")).length, 2);
-  sjekk("treffeflater finnes", g.klasser().filter((c) => c === "treff").length >= forventet + 2, true);
+  sjekk("treffeflater finnes", g.klasser().filter((c) => c === "treff").length >= forventet + 1, true);
 
   // Ingen NaN eller uendelig i geometrien — det gir usynlige elementer.
   const tall = [];
