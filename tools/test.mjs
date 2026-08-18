@@ -292,5 +292,60 @@ bolk("antatt morgen");
   sjekk("under to netter gir ingen gjetning", estimertMorgen("2026-08-18"), null);
 }
 
+/* ---------- alarmen ---------- */
+
+bolk("alarmen");
+{
+  const S = {};
+  const ringte = [];
+  const varslet = [];
+  const app = new Function("S", "chime", "notify", `
+    var LADDER = [[3,5,10],[5,10,12],[10,12,15],[12,15,17],[15,17,20],[17,20,25],[20,25,30]];
+    ${["waitMs", "sjekkAlarm"].map(grab).join("\n")}
+    return { sjekkAlarm };
+  `)(S, (full) => ringte.push(full), (t) => varslet.push(t));
+
+  const start = new Date(2026, 7, 18, 23, 0).getTime();
+  const ekteNa = Date.now;
+  const nullstill = () => Object.assign(S, {
+    night: 1, phase: "waiting", phaseStart: start, checkIndex: 0,
+    alarmedAt: 0, notified: false
+  });
+
+  // Natt 2, første venting = 5 min. Fire minutter ut: ingenting ennå.
+  nullstill();
+  Date.now = () => start + 4 * 60000;
+  app.sjekkAlarm();
+  sjekk("ingen alarm før tiden er ute", [ringte.length, varslet.length], [0, 0]);
+
+  // Fem minutter: den skal ringe — uansett hva som vises på skjermen.
+  Date.now = () => start + 5 * 60000 + 500;
+  app.sjekkAlarm();
+  sjekk("alarmen går når ventingen er over", ringte.length, 1);
+  sjekk("og det er det lange signalet", ringte[0], true);
+  sjekk("skrivebordsvarselet sendes", varslet.length, 1);
+
+  // Den skal ikke kjefte hvert kvart sekund.
+  app.sjekkAlarm();
+  app.sjekkAlarm();
+  sjekk("den maser ikke", ringte.length, 1);
+
+  // Men den minner om seg selv etter et minutt.
+  Date.now = () => start + 6 * 60000 + 1000;
+  app.sjekkAlarm();
+  sjekk("påminnelse etter et minutt", ringte.length, 2);
+  sjekk("påminnelsen er det korte signalet", ringte[1], false);
+
+  // Er du inne hos henne, skal ingenting ringe.
+  nullstill();
+  ringte.length = 0;
+  S.phase = "checking";
+  Date.now = () => start + 30 * 60000;
+  app.sjekkAlarm();
+  sjekk("stille mens du er inne hos henne", ringte.length, 0);
+
+  Date.now = ekteNa;
+}
+
 console.log(feil ? `\n${feil} FEIL` : "\nalle tester passerte");
 process.exit(feil ? 1 : 0);

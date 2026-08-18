@@ -912,7 +912,7 @@
     notified: false
   };
 
-  var ac = null, wakeLock = null, primaryAction = null, blinkOn = false;
+  var ac = null, wakeLock = null, primaryAction = null;
 
   var room = null, device = null;
   var pushTimer = null, syncBusy = false, lastPulled = 0, lastTouch = 0;
@@ -1288,16 +1288,57 @@
     }
   }
 
+  // Alarmen hører til natten som går, ikke til det du ser på. Lå den
+  // inne i rendringen, forsvant den i det øyeblikket du åpnet en
+  // tidligere natt — og da fikk du aldri beskjed om å gå inn.
+  function sjekkAlarm() {
+    if (S.phase !== "waiting") return;
+    var target = waitMs(S.checkIndex);
+    var now = Date.now();
+    if (target - (now - S.phaseStart) > 0) return;
+
+    if (!S.alarmedAt) {
+      S.alarmedAt = now;
+      chime(true);
+      if (!S.notified) {
+        S.notified = true;
+        notify("Gå inn til henne", "Ventingen på " + Math.round(target / 60000) + " minutter er over.");
+      }
+    } else if (now - S.alarmedAt > 60000) {
+      S.alarmedAt = now;
+      chime(false);
+    }
+  }
+
+  // Tittellinja viser nedtellingen uansett hvilken natt som er oppe,
+  // så den er til å stole på i oppgavelinja.
+  function liveTittel() {
+    var el = Date.now() - S.phaseStart;
+    if (S.phase === "waiting") {
+      var left = waitMs(S.checkIndex) - el;
+      if (left <= 0) return Math.floor(Date.now() / 900) % 2 === 0 ? "GÅ INN TIL HENNE" : "· · ·";
+      return mmss(left) + " · venter";
+    }
+    if (S.phase === "quiet") return mmss(el) + " · stille";
+    if (S.phase === "checking") return mmss(el) + " · inne";
+    if (S.phase === "asleep") return "Hun sover · " + BASE_TITLE;
+    return BASE_TITLE;
+  }
+
   function renderStage() {
     var now = Date.now();
     var el = now - S.phaseStart;
-    var title = BASE_TITLE;
 
     wallEl.textContent = clockTime(now);
 
     if (activeDay() !== today()) {
       visNatten(activeDay());
-      document.title = BASE_TITLE;
+      // Går det en nedtelling, skal du få vite det selv om du ser på
+      // en annen natt.
+      if (S.phase !== "idle") {
+        hintEl.textContent = "En nedtelling går i natt. Velg natten merket «(nå)» for å se den.";
+      }
+      document.title = liveTittel();
       return;
     }
 
@@ -1313,26 +1354,12 @@
         clockEl.textContent = "+" + mmss(-left);
         phaseEl.textContent = "Gå inn nå";
         hintEl.textContent = "Under ett minutt. Ikke løft henne opp. Gå ut mens hun er våken.";
-        blinkOn = Math.floor(now / 900) % 2 === 0;
-        title = blinkOn ? "GÅ INN TIL HENNE" : "· · ·";
-        if (!S.alarmedAt) {
-          S.alarmedAt = now;
-          chime(true);
-          if (!S.notified) {
-            S.notified = true;
-            notify("Gå inn til henne", "Ventingen på " + Math.round(target / 60000) + " minutter er over.");
-          }
-        } else if (now - S.alarmedAt > 60000) {
-          S.alarmedAt = now;
-          chime(false);
-        }
       } else {
         setArc(left / target, "waiting");
         clockEl.textContent = mmss(left);
         phaseEl.textContent = "Venter · besøk " + (S.checkIndex + 1);
         hintEl.textContent = "Venting nr. " + (S.checkIndex + 1) + " er på " +
           Math.round(target / 60000) + " minutter.";
-        title = mmss(left) + " · venter";
       }
 
     } else if (S.phase === "quiet") {
@@ -1342,7 +1369,6 @@
       phaseEl.textContent = "Stille";
       hintEl.textContent = "Klokken står. Begynner hun å gråte igjen, starter ventingen på " +
         Math.round(waitMs(S.checkIndex) / 60000) + " minutter på nytt.";
-      title = mmss(el) + " · stille";
 
     } else if (S.phase === "checking") {
       clockEl.className = "clock";
@@ -1353,7 +1379,6 @@
       hintEl.textContent = over
         ? "Avslutt nå. Jo lengre besøket varer, jo mer starter kvelden på nytt."
         : "Samme frase som alltid, hånd på ryggen, ut igjen innen ett minutt.";
-      title = mmss(el) + " · inne";
 
     } else if (S.phase === "asleep") {
       clockEl.className = "clock";
@@ -1362,10 +1387,10 @@
       clockEl.textContent = mins(total) + " min";
       phaseEl.textContent = "Hun sover";
       hintEl.textContent = S.episode.checks.length + " besøk · sovnet " + clockTime(S.episode.asleepAt) + ".";
-      title = "Hun sover · " + BASE_TITLE;
     }
 
-    if (document.title !== title) document.title = title;
+    var t = liveTittel();
+    if (document.title !== t) document.title = t;
   }
 
   function renderNights() {
@@ -2110,7 +2135,7 @@
         var bar = document.createElement("div");
         bar.className = "bar";
         bar.style.height = Math.max(4, Math.round((r.awake / max) * 82)) + "px";
-        bar.title = "Natt " + r.night + ": våken " + hm(r.awake * 60000) +
+        bar.title = r.day + ": våken " + hm(r.awake * 60000) +
           ", " + r.wakings + (r.wakings === 1 ? " oppvåkning" : " oppvåkninger") +
           (r.ongoing ? " (pågår)" : "");
 
@@ -2119,7 +2144,7 @@
         chart.appendChild(cell);
 
         var lab = document.createElement("span");
-        lab.textContent = r.night;
+        lab.textContent = Number(r.day.slice(8));          // dag i måneden
         if (r.day === activeDay()) lab.className = "now";
         axis.appendChild(lab);
 
@@ -2129,7 +2154,7 @@
       })(rows[k]);
     }
 
-    note.textContent = "over: våken minutter · under: oppvåkninger · tall = natt";
+    note.textContent = "over: våken minutter · under: oppvåkninger · tall = dato";
   }
 
   function render() {
@@ -2553,7 +2578,7 @@
     });
   }
 
-  setInterval(renderStage, 250);
+  setInterval(function () { sjekkAlarm(); renderStage(); }, 250);
   setInterval(save, 15000);
   // En natt som pågår vokser, så både stripen og tallene må følge med.
   setInterval(function () {
